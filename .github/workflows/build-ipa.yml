@@ -1,0 +1,136 @@
+name: Build IPA
+
+# 手动触发：在 GitHub Actions 页面点击 Run workflow 即可编译并导出 IPA 产物。
+on:
+  workflow_dispatch:
+    inputs:
+      method:
+        description: 'Export method'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - ad-hoc
+          - app-store
+      configuration:
+        description: 'Build configuration'
+        required: true
+        default: 'Release'
+        type: choice
+        options:
+          - Debug
+          - Release
+
+concurrency:
+  group: build-ipa
+  cancel-in-progress: true
+
+jobs:
+  build-ipa:
+    # 必须有 Xcode 26（extension 的 deployment target 是 26.0），只能用 macOS runner
+    runs-on: macos-latest
+    timeout-minutes: 120
+    env:
+      CONFIGURATION: ${{ inputs.configuration || 'Release' }}
+      METHOD: ${{ inputs.method || 'development' }}
+      # 签名相关 secrets（可选）。不配置则产出未签名 IPA。
+      TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+      CERT_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+      CERT_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21 (for Kotlin Multiplatform)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Check Xcode version
+        run: xcodebuild -version
+
+      # 签名证书（可选）：只有配置了 secrets 才会走签名流程
+      - name: Import signing certificate into keychain
+        if: env.CERT_BASE64 != '' && env.CERT_PASSWORD != ''
+        env:
+          KEYCHAIN_PASSWORD: ${{ runner.temp }}/keychain-password
+        run: |
+          set -euo pipefail
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          echo "$CERT_BASE64" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" \
+            -k build.keychain -P "$CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$KEYCHAIN_PASSWORD" build.keychain
+
+      # 归档：Xcode build phase 会自动执行 ./gradlew :shared:embedAndSignAppleFrameworkForXcode
+      - name: Archive
+        run: |
+          set -euo pipefail
+          if [ -n "$CERT_BASE64" ] && [ -n "$CERT_PASSWORD" ] && [ -n "$TEAM_ID" ]; then
+            xcodebuild archive \
+              -project iosApp/iosApp.xcodeproj \
+              -scheme iosApp \
+              -configuration "$CONFIGURATION" \
+              -destination 'generic/platform=iOS' \
+              -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
+              -allowProvisioningUpdates \
+              DEVELOPMENT_TEAM="$TEAM_ID"
+          else
+            echo "No signing secrets found, building unsigned archive"
+            xcodebuild archive \
+              -project iosApp/iosApp.xcodeproj \
+              -scheme iosApp \
+              -configuration "$CONFIGURATION" \
+              -destination 'generic/platform=iOS' \
+              -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          fi
+
+      # 导出 IPA：签名产物用 xcodebuild -exportArchive，未签名产物手动打包
+      - name: Export IPA
+        run: |
+          set -euo pipefail
+          APP_NAME="Goodtime: Pomodoro Timer.app"
+          if [ -n "$CERT_BASE64" ] && [ -n "$CERT_PASSWORD" ] && [ -n "$TEAM_ID" ]; then
+            cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>$METHOD</string>
+              <key>teamID</key>
+              <string>$TEAM_ID</string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+          </dict>
+          </plist>
+          EOF
+            xcodebuild -exportArchive \
+              -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
+              -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+              -exportPath "$RUNNER_TEMP/ipa"
+            mv "$RUNNER_TEMP/ipa/$APP_NAME.ipa" "$RUNNER_TEMP/Goodtime-$CONFIGURATION.ipa"
+          else
+            mkdir -p "$RUNNER_TEMP/ipa/Payload"
+            cp -R "$RUNNER_TEMP/iosApp.xcarchive/Products/Applications/$APP_NAME" "$RUNNER_TEMP/ipa/Payload/"
+            (cd "$RUNNER_TEMP/ipa" && zip -qry "$RUNNER_TEMP/Goodtime-$CONFIGURATION-unsigned.ipa" Payload)
+          fi
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Goodtime-ipa
+          path: ${{ runner.temp }}/*.ipa
+          if-no-files-found: error
