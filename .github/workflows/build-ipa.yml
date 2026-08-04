@@ -83,10 +83,15 @@ jobs:
       - name: Pre-link Kotlin framework (iosArm64 Debug)
         run: ./gradlew :shared:linkDebugFrameworkIosArm64 --stacktrace
 
-      # Archive（Debug 配置）
+      # Archive（Debug 配置，覆盖 deployment target → iOS 16.0）
+      # IPHONEOS_DEPLOYMENT_TARGET 覆盖 pbxproj 里的 18.2/26.0，
+      # 使编译产物可在 iOS 16+ 设备上安装运行。
+      # ⚠️  如果 Swift 代码使用了 iOS 18+ 独占 API，编译会报 availability 错误，
+      #     需要逐个加 @available 检查或降级 API 用法。
       - name: Archive
         run: |
           set -euo pipefail
+          EXTRA_ARGS="IPHONEOS_DEPLOYMENT_TARGET=16.0"
           if [ -n "$CERT_BASE64" ] && [ -n "$CERT_PASSWORD" ] && [ -n "$TEAM_ID" ]; then
             xcodebuild archive \
               -project iosApp/iosApp.xcodeproj \
@@ -95,7 +100,8 @@ jobs:
               -destination 'generic/platform=iOS' \
               -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
               -allowProvisioningUpdates \
-              DEVELOPMENT_TEAM="$TEAM_ID"
+              DEVELOPMENT_TEAM="$TEAM_ID" \
+              $EXTRA_ARGS
           else
             xcodebuild archive \
               -project iosApp/iosApp.xcodeproj \
@@ -103,7 +109,8 @@ jobs:
               -configuration Debug \
               -destination 'generic/platform=iOS' \
               -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
-              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+              $EXTRA_ARGS
           fi
 
       - name: Export IPA
