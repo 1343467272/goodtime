@@ -83,8 +83,11 @@ jobs:
 
       # 预编译 Kotlin 框架（设备目标）：提前暴露真实的 Kotlin/Native 报错，
       # 而不是埋在 xcodebuild 的日志里；Gradle 缓存让后续 Xcode 阶段几乎免费。
+      # 必须加大 Gradle daemon 堆内存：K/N 编译器以 in-process 方式跑在 daemon 里
+      # （gradle.properties 的 org.gradle.jvmargs=-Xmx3G 太小），Release 的 LTO
+      # 阶段（DevirtualizationAnalysis）会 OOM "Java heap space"。
       - name: Pre-link Kotlin framework (iosArm64)
-        run: ./gradlew :shared:linkReleaseFrameworkIosArm64 --stacktrace
+        run: ./gradlew -Dorg.gradle.jvmargs="-Xmx8G -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" :shared:linkReleaseFrameworkIosArm64 --stacktrace
 
       # 归档：Xcode build phase 会自动执行 ./gradlew :shared:embedAndSignAppleFrameworkForXcode
       - name: Archive
