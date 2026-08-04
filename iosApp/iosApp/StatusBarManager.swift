@@ -17,18 +17,16 @@
  */
 
 import SwiftUI
-import Observation
 import ComposeApp
 
 /// Manages the visibility of the iOS status bar.
-/// Bridges between Kotlin (StatusBarState) and SwiftUI (@Observable state).
-@Observable
-class StatusBarManager: StatusBarDelegate {
+/// Bridges between Kotlin (StatusBarState) and SwiftUI (ObservableObject state).
+class StatusBarManager: StatusBarDelegate, ObservableObject {
     /// Shared singleton instance
     static let shared = StatusBarManager()
 
     /// Whether the status bar should be hidden (observable by SwiftUI)
-    var isStatusBarHidden = false
+    @Published var isStatusBarHidden = false
 
     private init() {
         // Register as delegate to receive updates from Kotlin
