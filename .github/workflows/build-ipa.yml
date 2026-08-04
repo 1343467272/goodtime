@@ -48,6 +48,15 @@ jobs:
       CERT_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
 
     steps:
+      - name: Check runner memory
+        run: |
+          echo "=== Physical memory ==="
+          sysctl hw.memsize | awk '{printf "%.1f GB\n", $2/1073741824}'
+          echo "=== Swap ==="
+          sysctl vm.swapusage
+          echo "=== Java detected heap limit ==="
+          java -XshowSettings:vm -version 2>&1 | grep -E 'MaxHeapSize|heap'
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -59,6 +68,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
+
+      - name: Clear stale Gradle config cache
+        run: rm -rf .gradle/configuration-cache
 
       - name: Check Xcode version
         run: xcodebuild -version
