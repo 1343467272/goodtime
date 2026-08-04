@@ -28,8 +28,13 @@ concurrency:
 
 jobs:
   build-ipa:
-    # 必须有 Xcode 26（extension 的 deployment target 是 26.0），只能用 macOS runner
-    runs-on: macos-latest
+    # 必须用 macOS 26 / Xcode 26：
+    #   - extension 的 deployment target 是 26.0
+    #   - Compose Multiplatform 1.11 的 Kotlin/Native 产物引用了只在 iOS 26 SDK 里存在的符号
+    #     （如 UIViewLayoutRegion），在旧 SDK（macos-15 / Xcode 16.4）上 link 会报
+    #     "Undefined symbols"，Kotlin/Native 以 "Compilation finished with errors" 失败。
+    #   macos-latest 不可预测，固定 macos-26 保证可复现。
+    runs-on: macos-26
     timeout-minutes: 120
     env:
       CONFIGURATION: ${{ inputs.configuration || 'Release' }}
@@ -72,6 +77,11 @@ jobs:
             -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple: -s \
             -k "$KEYCHAIN_PASSWORD" build.keychain
+
+      # 预编译 Kotlin 框架（设备目标）：提前暴露真实的 Kotlin/Native 报错，
+      # 而不是埋在 xcodebuild 的日志里；Gradle 缓存让后续 Xcode 阶段几乎免费。
+      - name: Pre-link Kotlin framework (iosArm64)
+        run: ./gradlew :shared:linkReleaseFrameworkIosArm64 --stacktrace
 
       # 归档：Xcode build phase 会自动执行 ./gradlew :shared:embedAndSignAppleFrameworkForXcode
       - name: Archive
