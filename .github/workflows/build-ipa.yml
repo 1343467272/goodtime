@@ -35,6 +35,9 @@ jobs:
     #     "Undefined symbols"，Kotlin/Native 以 "Compilation finished with errors" 失败。
     #   macos-latest 不可预测，固定 macos-26 保证可复现。
     runs-on: macos-26
+    # 用于创建 Release（附件形式直链下载 IPA）；只编译 iOS，不编译 Android
+    permissions:
+      contents: write
     timeout-minutes: 120
     env:
       CONFIGURATION: ${{ inputs.configuration || 'Release' }}
@@ -144,3 +147,19 @@ jobs:
           name: Goodtime-ipa
           path: ${{ runner.temp }}/*.ipa
           if-no-files-found: error
+
+      # 生成 Release 并附加 IPA，直接可从 Releases 页面下载（长期保留，不依赖 artifact）
+      - name: Create GitHub Release with IPA
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ipa-${{ github.run_id }}
+          name: IPA ${{ env.CONFIGURATION }} build #${{ github.run_id }}
+          body: |
+            iOS IPA build artifact.
+
+            - Configuration: ${{ env.CONFIGURATION }}
+            - Method: ${{ env.METHOD }}
+            - Signed: ${{ env.CERT_BASE64 != '' && env.CERT_PASSWORD != '' && env.TEAM_ID != '' }}
+          files: ${{ runner.temp }}/*.ipa
+          draft: false
+          prerelease: true
