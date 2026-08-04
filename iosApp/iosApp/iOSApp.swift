@@ -10,8 +10,8 @@ struct iOSApp: App {
 	var body: some Scene {
 		WindowGroup {
 			ContentView()
-        }.onChange(of: scenePhase) {
-            if scenePhase == .active {
+        }.onChange(of: scenePhase) { phase in
+            if phase == .active {
                 // Clear notifications when app becomes active
                 UNUserNotificationCenter.current().removeAllDeliveredNotifications()
             }
