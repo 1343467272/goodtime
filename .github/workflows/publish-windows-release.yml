@@ -1,0 +1,78 @@
+name: Publish Windows Release
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish (e.g. 3.2.8)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The Gradle daemon must run on JDK 21 (kmp-app-version plugin requirement).
+      # The JDK 17 toolchain from jvmToolchain(17) is auto-provisioned via the
+      # foojay resolver configured in settings.gradle.kts.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      # gradle.properties pins org.gradle.java.home to a machine-specific path;
+      # repoint it at the runner's JDK so the daemon can start on CI.
+      - name: Point Gradle daemon at the runner JDK
+        shell: pwsh
+        run: |
+          $javaHome = $env:JAVA_HOME.Replace('\', '\\')
+          $content = Get-Content -Path gradle.properties -Raw
+          $content = [regex]::Replace($content, '(?m)^org\.gradle\.java\.home=.*$', "org.gradle.java.home=$javaHome")
+          [System.IO.File]::WriteAllText((Join-Path (Get-Location) 'gradle.properties'), $content, [System.Text.UTF8Encoding]::new($false))
+
+      - name: Build MSI and EXE
+        shell: cmd
+        run: .\gradlew.bat :desktopApp:packageDistributionForCurrentOS --no-daemon
+
+      - name: Determine release tag
+        id: tag
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          $tag = if ($env:EVENT_NAME -eq 'workflow_dispatch' -and $env:MANUAL_TAG -ne '') { $env:MANUAL_TAG } else { $env:REF_NAME }
+          Write-Output "release_tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Upload installers to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          name: ${{ steps.tag.outputs.release_tag }}
+          files: |
+            desktopApp/build/compose/binaries/main/msi/Goodtime-*.msi
+            desktopApp/build/compose/binaries/main/exe/Goodtime-*.exe
+          fail_on_unmatched_files: true
+          body: |
+            ## Goodtime ${{ steps.tag.outputs.release_tag }} (Windows)
+
+            Windows installer (MSI) and portable launcher (EXE) for Goodtime.
+
+            - **Goodtime-<version>.msi** — recommended installer
+            - **Goodtime-<version>.exe** — portable launcher
+
+            ### Changes
+            - Windows notifications for session finish and scheduled productivity reminders
+            - Fixed onboarding crash in the packaged build (added `jdk.unsupported` to the jlink module set)
