@@ -65,7 +65,7 @@ fun NavGraphBuilder.goodtimeNavGraph(
     hideBottomBar: () -> Boolean,
     onUpdateClicked: (() -> Unit)?,
 ) {
-    composable<OnboardingDest> { OnboardingScreen() }
+    composable<OnboardingDest> { OnboardingScreen(mainViewModel = mainViewModel) }
     composable<MainDest> {
         MainScreen(
             onSurfaceClick = onSurfaceClick,

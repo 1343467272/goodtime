@@ -134,14 +134,14 @@ fun GoodtimeApp(
     }
 
     // Calculate start destination
-    val startDestination =
-        remember(uiState.showOnboarding) {
-            if (uiState.showOnboarding) {
-                OnboardingDest
-            } else {
-                MainDest
+        val startDestination =
+            remember(uiState.showOnboarding) {
+                if (uiState.showOnboarding) {
+                    OnboardingDest
+                } else {
+                    MainDest
+                }
             }
-        }
 
     ApplicationTheme(darkTheme = isDarkTheme, dynamicColor = uiState.isDynamicColor) {
         val navController = rememberNavController()

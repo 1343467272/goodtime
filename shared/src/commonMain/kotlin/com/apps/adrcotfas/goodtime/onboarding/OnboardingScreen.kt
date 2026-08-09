@@ -73,18 +73,17 @@ import goodtime_productivity.shared.generated.resources.intro1_title
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
-import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-fun OnboardingScreen(viewModel: MainViewModel = koinViewModel()) {
+fun OnboardingScreen(mainViewModel: MainViewModel) {
     val pages = OnboardingPage.pages
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val coroutineScope = rememberCoroutineScope()
 
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by mainViewModel.uiState.collectAsStateWithLifecycle()
     var showPro by rememberSaveable { mutableStateOf(false) }
-    val finish = { viewModel.setShowOnboarding(false) }
+    val finish = { mainViewModel.setShowOnboarding(false) }
 
     if (showPro) {
         BackHandler { finish() }

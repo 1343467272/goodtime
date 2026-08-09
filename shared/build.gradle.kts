@@ -42,6 +42,12 @@ kotlin {
         }
     }
 
+    jvm("desktop") {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
+
     // The RevenueCat klib embeds a Swift library search path from its publisher's machine;
     // point the simulator test binary at the local toolchain so swiftCompatibility* resolve.
     iosSimulatorArm64().binaries.configureEach {
@@ -123,6 +129,14 @@ kotlin {
             implementation(libs.purchases.ui)
         }
 
+        val desktopMain by getting {
+            dependencies {
+                api(libs.androidx.sqlite.bundled)
+                implementation(libs.androidx.paging.common)
+                implementation(libs.coroutines.swing)
+            }
+        }
+
         iosTest.dependencies {
             implementation(libs.androidx.room.testing)
         }
@@ -180,6 +194,7 @@ dependencies {
     add("kspAndroid", libs.androidx.room.compiler)
     add("kspIosArm64", libs.androidx.room.compiler)
     add("kspIosSimulatorArm64", libs.androidx.room.compiler)
+    add("kspDesktop", libs.androidx.room.compiler)
 }
 
 // aboutlibraries.json is gitignored, so it must be (re)generated before the copy task
@@ -194,41 +209,46 @@ configurations.configureEach {
     exclude(group = "com.amazon.device", module = "amazon-appstore-sdk")
 }
 
-// Workaround for androidx.paging alpha version not having full iOS support
+// Workaround for androidx.paging alpha version not having full iOS/desktop support
 configurations.all {
-    if (name.contains("ios", ignoreCase = true)) {
+    if (name.contains("ios", ignoreCase = true) || name.contains("desktop", ignoreCase = true)) {
         resolutionStrategy {
             eachDependency {
-                // Replace ktx libraries with their base counterparts for iOS compatibility
+                // Replace ktx libraries with their base counterparts for iOS/desktop compatibility
                 when {
                     requested.group == "androidx.paging" && requested.name == "paging-common-ktx" -> {
                         useTarget("${requested.group}:paging-common:${requested.version}")
-                        because("paging-common-ktx doesn't support iOS, using paging-common instead")
+                        because("paging-common-ktx doesn't support iOS/desktop, using paging-common instead")
+                    }
+
+                    requested.group == "androidx.paging" && requested.name == "paging-runtime" -> {
+                        useTarget("${requested.group}:paging-common:${requested.version}")
+                        because("paging-runtime doesn't support iOS/desktop, using paging-common instead")
                     }
 
                     requested.group == "org.jetbrains.kotlinx" && requested.name == "kotlinx-coroutines-android" -> {
                         useTarget("org.jetbrains.kotlinx:kotlinx-coroutines-core:${requested.version}")
-                        because("kotlinx-coroutines-android doesn't support iOS, using core instead")
+                        because("kotlinx-coroutines-android doesn't support iOS/desktop, using core instead")
                     }
 
                     requested.group == "androidx.lifecycle" && requested.name == "lifecycle-runtime-ktx" -> {
                         useTarget("${requested.group}:lifecycle-runtime:${requested.version}")
-                        because("lifecycle-runtime-ktx doesn't support iOS, using lifecycle-runtime instead")
+                        because("lifecycle-runtime-ktx doesn't support iOS/desktop, using lifecycle-runtime instead")
                     }
 
                     requested.group == "androidx.lifecycle" && requested.name == "lifecycle-livedata-ktx" -> {
                         useTarget("${requested.group}:lifecycle-livedata:${requested.version}")
-                        because("lifecycle-livedata-ktx doesn't support iOS, using lifecycle-livedata instead")
+                        because("lifecycle-livedata-ktx doesn't support iOS/desktop, using lifecycle-livedata instead")
                     }
 
                     requested.group == "androidx.lifecycle" && requested.name == "lifecycle-livedata-core-ktx" -> {
                         useTarget("${requested.group}:lifecycle-livedata-core:${requested.version}")
-                        because("lifecycle-livedata-core-ktx doesn't support iOS, using lifecycle-livedata-core instead")
+                        because("lifecycle-livedata-core-ktx doesn't support iOS/desktop, using lifecycle-livedata-core instead")
                     }
 
                     requested.group == "androidx.lifecycle" && requested.name == "lifecycle-viewmodel-ktx" -> {
                         useTarget("${requested.group}:lifecycle-viewmodel:${requested.version}")
-                        because("lifecycle-viewmodel-ktx doesn't support iOS, using lifecycle-viewmodel instead")
+                        because("lifecycle-viewmodel-ktx doesn't support iOS/desktop, using lifecycle-viewmodel instead")
                     }
                 }
             }
