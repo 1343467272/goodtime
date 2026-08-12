@@ -26,6 +26,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.WebSocketSession
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -45,11 +46,21 @@ class SyncServer(
 
     fun start() {
         if (server != null) return
+        // CIO binds the listening socket in an engine-owned coroutine; a failure there (e.g.
+        // SocketException EPERM when the OS denies socket creation) is an uncaught exception
+        // unless a handler is present, crashing the process even though runCatching below
+        // catches the synchronous part. Inject a handler via parentCoroutineContext so the
+        // engine failure is logged instead of killing the app.
+        val exceptionHandler =
+            CoroutineExceptionHandler { _, throwable ->
+                log.e { "sync server coroutine failed: $throwable" }
+            }
         val newServer =
-            embeddedServer(
+            coroutineScope.embeddedServer(
                 factory = CIO,
                 host = "0.0.0.0",
                 port = port,
+                parentCoroutineContext = exceptionHandler,
             ) {
                 install(WebSockets)
                 routing {
