@@ -73,6 +73,18 @@ class SyncManager(
     private var lastPublishedSnapshot: SnapshotPayload? = null
     private var lastPublishedTimerState: SyncedTimerState? = null
 
+    /**
+     * True only for the first inbound timer-state exchange after the process started. While set,
+     * an overwritten timer is adopted as-is instead of being force-paused, so opening the app
+     * while the other device is running its timer mirrors that timer instead of stopping it.
+     * Cleared as soon as the first inbound snapshot/timer state is processed; the normal
+     * last-write-wins + pause-on-overwrite mechanism applies to every later exchange.
+     */
+    private var startupYieldActive = true
+
+    /** Whether [startInternal] has already run in this process (re-enabling sync is not a fresh open). */
+    private var hasStartedBefore = false
+
     private val _status = MutableStateFlow(SyncStatus())
     val status: StateFlow<SyncStatus> = _status.asStateFlow()
 
@@ -106,6 +118,13 @@ class SyncManager(
     private suspend fun startInternal() {
         val syncSettings = settingsRepo.settings.first().syncSettings
         if (!syncSettings.enabled) return
+
+        // Only a genuine cold start (the first sync start in this process) yields to peers;
+        // re-enabling sync mid-session must keep the normal pause-on-overwrite mechanism.
+        if (hasStartedBefore) {
+            startupYieldActive = false
+        }
+        hasStartedBefore = true
 
         val deviceId =
             syncSettings.deviceId.ifEmpty {
@@ -485,6 +504,17 @@ class SyncManager(
         }
     }
 
+    /**
+     * Atomically takes the startup yield flag: reports whether this inbound exchange is the
+     * first one of the process and disables the yield for all subsequent exchanges.
+     */
+    private suspend fun consumeStartupYield(): Boolean =
+        stateMutex.withLock {
+            val active = startupYieldActive
+            startupYieldActive = false
+            active
+        }
+
     private suspend fun removeConnection(connection: SyncPeerConnection) {
         connectionMutex.withLock { connections.remove(connection) }
         log.i { "sync peer disconnected" }
@@ -516,8 +546,15 @@ class SyncManager(
         val mergedProfiles = syncEngine.mergeTimerProfiles(local.timerProfiles, remote.timerProfiles)
         val mergedSettings = syncEngine.mergeSyncedSettings(local.settings, remote.settings)
         val mergedTimerState = syncEngine.mergeTimerState(local.timerState, remote.timerState)
+        val startupYield = consumeStartupYield()
         val resolvedTimerState =
-            mergedTimerState?.let { syncEngine.pauseOnOverwrite(local.timerState, it, timeProvider.now()) }
+            mergedTimerState?.let {
+                if (startupYield) {
+                    it
+                } else {
+                    syncEngine.pauseOnOverwrite(local.timerState, it, timeProvider.now())
+                }
+            }
 
         localDataRepo.applySyncedSessions(sessionMerge.sessionsToApply, sessionMerge.deletedSyncIds)
         localDataRepo.applySyncedLabels(mergedLabels)
@@ -563,9 +600,17 @@ class SyncManager(
         val timerManager = timerManagerProvider()
         val local = timerManager.toSyncedTimerState()
         val merged = syncEngine.mergeTimerState(local, remote) ?: return
+        val startupYield = consumeStartupYield()
         // If this device's own state got overwritten by a different RUNNING session, pause
         // instead of running it; the fresh pause timestamp propagates back to the winner.
-        val resolved = syncEngine.pauseOnOverwrite(local, merged, timeProvider.now())
+        // A freshly opened device skips the pause and mirrors the peer instead, so opening the
+        // app doesn't stop a timer that is already running on the other device.
+        val resolved =
+            if (startupYield) {
+                merged
+            } else {
+                syncEngine.pauseOnOverwrite(local, merged, timeProvider.now())
+            }
         if (resolved != local) {
             timerManager.applySyncedTimerState(resolved)
         }
