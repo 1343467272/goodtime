@@ -36,7 +36,7 @@ class SyncClient(
     private val host: String,
     private val port: Int,
     private val json: Json,
-    private val connectionFactory: suspend (WebSocketSession, String) -> SyncPeerConnection,
+    private val connectionFactory: suspend (WebSocketSession, String) -> SyncPeerConnection?,
     private val coroutineScope: CoroutineScope,
     private val log: Logger,
 ) {
@@ -53,7 +53,10 @@ class SyncClient(
             }
         return try {
             val session = client.webSocketSession("ws://$host:$port/sync")
-            val connection = connectionFactory(session, host)
+            val connection = connectionFactory(session, host) ?: run {
+                runCatching { client.close() }
+                return true
+            }
             coroutineScope.launch {
                 try {
                     connection.start()

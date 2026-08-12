@@ -25,6 +25,7 @@ import com.apps.adrcotfas.goodtime.data.local.LocalDataRepository
 import com.apps.adrcotfas.goodtime.data.settings.SettingsRepository
 import com.apps.adrcotfas.goodtime.data.settings.SyncedSettings
 import io.ktor.websocket.WebSocketSession
+import io.ktor.websocket.close
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -182,6 +183,10 @@ class SyncManager(
      * silently and only log)
      */
     suspend fun connectTo(host: String, port: Int? = null, reportError: Boolean = true): Boolean {
+        if (connectionMutex.withLock { connections.any { it.host == host } }) {
+            log.i { "already connected to $host" }
+            return true
+        }
         if (reportError) {
             _status.update { it.copy(connectingTo = host, lastConnectError = null) }
         }
@@ -288,33 +293,47 @@ class SyncManager(
         }
     }
 
-    private suspend fun createConnection(session: WebSocketSession, host: String): SyncPeerConnection {
+    private suspend fun createConnection(session: WebSocketSession, host: String): SyncPeerConnection? {
         val syncSettings = settingsRepo.settings.first().syncSettings
-        lateinit var connection: SyncPeerConnection
-        connection =
-            SyncPeerConnection(
-                session = session,
-                json = json,
-                host = host,
-                deviceId = syncSettings.deviceId,
-                serverName = syncSettings.serverName,
-                onHello = { _, _ -> updatePeersStatus() },
-                onSnapshot = ::onSnapshotInternal,
-                onTimerState = ::onTimerStateInternal,
-                onSettings = ::onSettingsInternal,
-                onDisconnected = { conn ->
-                    removeConnection(conn)
-                    updatePeersStatus()
-                },
-                log = log,
-            )
-        connectionMutex.withLock { connections.add(connection) }
+        var connection: SyncPeerConnection? = null
+        val added =
+            connectionMutex.withLock {
+                if (connections.any { it.host == host }) {
+                    log.i { "already connected to $host, skipping duplicate connection" }
+                    false
+                } else {
+                    connection =
+                        SyncPeerConnection(
+                            session = session,
+                            json = json,
+                            host = host,
+                            deviceId = syncSettings.deviceId,
+                            serverName = syncSettings.serverName,
+                            onHello = { _, _ -> updatePeersStatus() },
+                            onSnapshot = ::onSnapshotInternal,
+                            onTimerState = ::onTimerStateInternal,
+                            onSettings = ::onSettingsInternal,
+                            onDisconnected = { conn ->
+                                removeConnection(conn)
+                                updatePeersStatus()
+                            },
+                            log = log,
+                        )
+                    connections.add(connection)
+                    true
+                }
+            }
+        if (!added) {
+            runCatching { session.close() }
+            return null
+        }
         updatePeersStatus()
+        val addedConnection = connection ?: return null
         // Hand the new peer our current state; the merge-and-broadcast path then converges.
         coroutineScope.launch {
-            safeSend { connection.sendSnapshot(buildSnapshot()) }
+            safeSend { addedConnection.sendSnapshot(buildSnapshot()) }
         }
-        return connection
+        return addedConnection
     }
 
     private suspend fun updatePeersStatus() {

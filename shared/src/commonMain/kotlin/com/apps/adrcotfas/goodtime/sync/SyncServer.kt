@@ -40,7 +40,7 @@ class SyncServer(
     private val coroutineScope: CoroutineScope,
     private val json: Json,
     private val port: Int,
-    private val connectionFactory: suspend (WebSocketSession, String) -> SyncPeerConnection,
+    private val connectionFactory: suspend (WebSocketSession, String) -> SyncPeerConnection?,
     private val log: Logger,
     /** Called with a message when the listen socket fails to bind/start, so the UI can report it. */
     private val onStatus: (String?) -> Unit = {},
@@ -71,7 +71,7 @@ class SyncServer(
                 install(WebSockets)
                 routing {
                     webSocket("/sync") {
-                        connectionFactory(this, call.request.local.remoteHost).start()
+                        connectionFactory(this, call.request.local.remoteHost)?.start()
                     }
                 }
             }
