@@ -34,6 +34,10 @@
     <string name="settings_sync_connect_title">连接到设备</string>
     <string name="settings_sync_connect_hint">设备 IP 地址</string>
     <string name="settings_sync_connect_button">连接</string>
+    <string name="settings_sync_connecting">正在连接…</string>
+    <string name="settings_sync_connect_failed">连接失败。请检查 IP 和端口，并确保两台设备在同一网络，或连接自动发现的设备。</string>
+    <string name="settings_sync_discover_title">附近设备</string>
+    <string name="settings_sync_discover_empty">未发现设备。请确保其他设备已开启同步，且两台设备在同一网络。</string>
     <string name="settings_sync_last_sync">上次同步：%1$s</string>
     <string name="settings_sync_never_synced">尚未同步</string>
     <string name="settings_sync_edit_name">编辑设备名称</string>

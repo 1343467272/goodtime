@@ -55,12 +55,16 @@ import goodtime_productivity.shared.generated.resources.main_cancel
 import goodtime_productivity.shared.generated.resources.main_ok
 import goodtime_productivity.shared.generated.resources.settings_sync
 import goodtime_productivity.shared.generated.resources.settings_sync_connect_button
+import goodtime_productivity.shared.generated.resources.settings_sync_connect_failed
 import goodtime_productivity.shared.generated.resources.settings_sync_connect_hint
 import goodtime_productivity.shared.generated.resources.settings_sync_connect_title
 import goodtime_productivity.shared.generated.resources.settings_sync_connected_devices
+import goodtime_productivity.shared.generated.resources.settings_sync_connecting
 import goodtime_productivity.shared.generated.resources.settings_sync_device_id
 import goodtime_productivity.shared.generated.resources.settings_sync_device_name
 import goodtime_productivity.shared.generated.resources.settings_sync_device_name_desc
+import goodtime_productivity.shared.generated.resources.settings_sync_discover_empty
+import goodtime_productivity.shared.generated.resources.settings_sync_discover_title
 import goodtime_productivity.shared.generated.resources.settings_sync_edit_name
 import goodtime_productivity.shared.generated.resources.settings_sync_edit_port
 import goodtime_productivity.shared.generated.resources.settings_sync_enable_desc
@@ -128,6 +132,12 @@ fun SyncScreen(onNavigateBack: () -> Boolean) {
                 BetterListItem(
                     title = stringResource(Res.string.settings_sync_connected_devices, uiState.connectedPeers),
                 )
+                uiState.peers.forEach { peer ->
+                    BetterListItem(
+                        title = peer.deviceName,
+                        subtitle = peer.host,
+                    )
+                }
                 val lastSyncLabel =
                     uiState.lastSyncLabel ?: stringResource(Res.string.settings_sync_never_synced)
                 BetterListItem(
@@ -173,17 +183,72 @@ fun SyncScreen(onNavigateBack: () -> Boolean) {
                         modifier = Modifier.weight(1f),
                         value = hostInput,
                         maxLines = 1,
-                        onValueChange = { hostInput = it },
+                        enabled = !uiState.connecting,
+                        onValueChange = {
+                            hostInput = it
+                            viewModel.clearConnectError()
+                        },
                         label = { Text(stringResource(Res.string.settings_sync_connect_hint)) },
                     )
                     Button(
-                        enabled = hostInput.isNotBlank(),
+                        enabled = hostInput.isNotBlank() && !uiState.connecting,
                         onClick = {
                             viewModel.connectTo(hostInput.trim())
                             hostInput = ""
                         },
                     ) {
-                        Text(stringResource(Res.string.settings_sync_connect_button))
+                        if (uiState.connecting) {
+                            Text(stringResource(Res.string.settings_sync_connecting))
+                        } else {
+                            Text(stringResource(Res.string.settings_sync_connect_button))
+                        }
+                    }
+                }
+                if (uiState.connectFailed) {
+                    Text(
+                        modifier =
+                        Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp),
+                        text = stringResource(Res.string.settings_sync_connect_failed),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    uiState.connectErrorDetail?.let { detail ->
+                        Text(
+                            modifier =
+                            Modifier
+                                .padding(horizontal = 16.dp)
+                                .padding(bottom = 8.dp),
+                            text = detail,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+
+            if (syncSettings.enabled) {
+                SubtleHorizontalDivider()
+                CompactPreferenceGroupTitle(text = stringResource(Res.string.settings_sync_discover_title))
+                if (uiState.discoveredPeers.isEmpty()) {
+                    BetterListItem(
+                        title = stringResource(Res.string.settings_sync_discover_empty),
+                    )
+                } else {
+                    uiState.discoveredPeers.forEach { peer ->
+                        BetterListItem(
+                            title = peer.deviceName,
+                            subtitle = peer.host,
+                            trailing = {
+                                TextButton(
+                                    enabled = !uiState.connecting,
+                                    onClick = { viewModel.connectTo(peer) },
+                                ) {
+                                    Text(stringResource(Res.string.settings_sync_connect_button))
+                                }
+                            },
+                        )
                     }
                 }
             }

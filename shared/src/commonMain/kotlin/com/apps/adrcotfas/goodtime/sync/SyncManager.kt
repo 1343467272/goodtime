@@ -28,6 +28,7 @@ import io.ktor.websocket.WebSocketSession
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 
 /**
@@ -68,7 +70,12 @@ class SyncManager(
     private val _status = MutableStateFlow(SyncStatus())
     val status: StateFlow<SyncStatus> = _status.asStateFlow()
 
+    private val _discoveredPeers = MutableStateFlow<List<DiscoveredPeer>>(emptyList())
+    val discoveredPeers: StateFlow<List<DiscoveredPeer>> = _discoveredPeers.asStateFlow()
+
     private var server: SyncServer? = null
+    private var discovery: DiscoveryManager? = null
+    private var discoveryJob: Job? = null
     private var collectJob: Job? = null
     private var settingsJob: Job? = null
 
@@ -92,9 +99,39 @@ class SyncManager(
                 connectionFactory = ::createConnection,
                 log = log,
             ).also { it.start() }
+        startDiscovery()
         startCollectors()
         _status.update { it.copy(serverRunning = true) }
         log.i { "sync started, deviceId=$deviceId" }
+    }
+
+    private suspend fun startDiscovery() {
+        discovery?.stop()
+        discovery = null
+        discoveryJob?.cancel()
+        discoveryJob = null
+        val ownDeviceId = settingsRepo.settings.first().syncSettings.deviceId
+        val manager =
+            DiscoveryManager(
+                coroutineScope = coroutineScope,
+                json = json,
+                log = log,
+                nowMillis = { timeProvider.now() },
+            )
+        discovery = manager
+        discoveryJob =
+            coroutineScope.launch {
+                manager.discoveredPeers.collect { _discoveredPeers.value = it }
+            }
+        coroutineScope.launch {
+            manager.start(
+                ownDeviceId = { ownDeviceId },
+                announcement = {
+                    val s = settingsRepo.settings.first().syncSettings
+                    DiscoveryAnnouncement(deviceId = s.deviceId, deviceName = s.serverName, port = s.port)
+                },
+            )
+        }
     }
 
     suspend fun stop() {
@@ -104,6 +141,11 @@ class SyncManager(
         settingsJob = null
         server?.stop()
         server = null
+        discoveryJob?.cancel()
+        discoveryJob = null
+        discovery?.stop()
+        discovery = null
+        _discoveredPeers.value = emptyList()
         connectionMutex.withLock {
             connections.toList().forEach { it.close() }
             connections.clear()
@@ -112,21 +154,62 @@ class SyncManager(
             lastPublishedSnapshot = null
             lastPublishedTimerState = null
         }
-        _status.update { it.copy(serverRunning = false, connectedPeers = 0) }
+        _status.update { it.copy(serverRunning = false, connectedPeers = 0, peers = emptyList()) }
     }
 
-    fun connectTo(host: String) {
-        coroutineScope.launch {
-            val port = settingsRepo.settings.first().syncSettings.port
-            SyncClient(
-                host = host,
-                port = port,
-                json = json,
-                connectionFactory = ::createConnection,
-                coroutineScope = coroutineScope,
-                log = log,
-            ).connect()
+    /**
+     * Opens an outbound connection to [host]. Suspends until the handshake succeeds or fails
+     * (with a timeout), updating [SyncStatus] so the UI can show progress and errors.
+     *
+     * @param port port of the peer's sync server; defaults to this device's configured port
+     */
+    suspend fun connectTo(host: String, port: Int? = null): Boolean {
+        _status.update { it.copy(connectingTo = host, lastConnectError = null) }
+        val result =
+            try {
+                withTimeout(CONNECT_TIMEOUT_MS) {
+                    val effectivePort = port ?: settingsRepo.settings.first().syncSettings.port
+                    SyncClient(
+                        host = host,
+                        port = effectivePort,
+                        json = json,
+                        connectionFactory = ::createConnection,
+                        coroutineScope = coroutineScope,
+                        log = log,
+                    ).connect()
+                }
+            } catch (e: TimeoutCancellationException) {
+                log.e { "connect to $host timed out" }
+                _status.update {
+                    it.copy(
+                        connectingTo = null,
+                        lastConnectError = e.message ?: "Connection timed out",
+                    )
+                }
+                return false
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.e { "connect to $host failed: $e" }
+                _status.update {
+                    it.copy(
+                        connectingTo = null,
+                        lastConnectError = e.message ?: "Connection failed",
+                    )
+                }
+                return false
+            }
+        _status.update { it.copy(connectingTo = null) }
+        if (result) {
+            log.i { "connected to $host" }
+        } else {
+            _status.update { it.copy(lastConnectError = "Connection failed") }
         }
+        return result
+    }
+
+    fun clearConnectError() {
+        _status.update { it.copy(lastConnectError = null) }
     }
 
     /**
@@ -149,22 +232,28 @@ class SyncManager(
         }
     }
 
-    private suspend fun createConnection(session: WebSocketSession): SyncPeerConnection {
+    private suspend fun createConnection(session: WebSocketSession, host: String): SyncPeerConnection {
         val syncSettings = settingsRepo.settings.first().syncSettings
-        val connection =
+        lateinit var connection: SyncPeerConnection
+        connection =
             SyncPeerConnection(
                 session = session,
                 json = json,
+                host = host,
                 deviceId = syncSettings.deviceId,
                 serverName = syncSettings.serverName,
+                onHello = { _, _ -> updatePeersStatus() },
                 onSnapshot = ::onSnapshotInternal,
                 onTimerState = ::onTimerStateInternal,
                 onSettings = ::onSettingsInternal,
-                onDisconnected = ::removeConnection,
+                onDisconnected = { conn ->
+                    removeConnection(conn)
+                    updatePeersStatus()
+                },
                 log = log,
             )
         connectionMutex.withLock { connections.add(connection) }
-        _status.update { it.copy(connectedPeers = connections.size) }
+        updatePeersStatus()
         // Hand the new peer our current state; the merge-and-broadcast path then converges.
         coroutineScope.launch {
             safeSend { connection.sendSnapshot(buildSnapshot()) }
@@ -172,9 +261,22 @@ class SyncManager(
         return connection
     }
 
+    private suspend fun updatePeersStatus() {
+        connectionMutex.withLock {
+            val peers =
+                connections.mapNotNull { conn ->
+                    if (conn.peerDeviceId.isEmpty()) {
+                        null
+                    } else {
+                        SyncPeerInfo(conn.peerDeviceId, conn.peerDeviceName, conn.host)
+                    }
+                }
+            _status.update { it.copy(peers = peers, connectedPeers = connections.size) }
+        }
+    }
+
     private suspend fun removeConnection(connection: SyncPeerConnection) {
         connectionMutex.withLock { connections.remove(connection) }
-        _status.update { it.copy(connectedPeers = connections.size) }
         log.i { "sync peer disconnected" }
     }
 
@@ -327,5 +429,9 @@ class SyncManager(
         } catch (_: Exception) {
             // connection died mid-send; it will be removed by the read loop's finally block
         }
+    }
+
+    companion object {
+        private const val CONNECT_TIMEOUT_MS = 10_000L
     }
 }

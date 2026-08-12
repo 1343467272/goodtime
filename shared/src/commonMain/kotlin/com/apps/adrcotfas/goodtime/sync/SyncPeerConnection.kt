@@ -43,14 +43,24 @@ import kotlinx.serialization.json.Json
 class SyncPeerConnection(
     private val session: WebSocketSession,
     private val json: Json,
+    /** Address of the remote peer; used for display and to reconnect from a discovered device. */
+    val host: String,
     private val deviceId: String,
     private val serverName: String,
+    private val onHello: suspend (SyncPeerConnection, HelloPayload) -> Unit,
     private val onSnapshot: suspend (SnapshotPayload) -> Unit,
     private val onTimerState: suspend (SyncedTimerState) -> Unit,
     private val onSettings: suspend (SyncedSettings) -> Unit,
     private val onDisconnected: suspend (SyncPeerConnection) -> Unit,
     private val log: Logger,
 ) {
+    /** The remote peer's advertised identity, populated once its HELLO frame arrives. */
+    var peerDeviceId: String = ""
+        private set
+
+    var peerDeviceName: String = ""
+        private set
+
     val isActive: Boolean
         get() = session.isActive
 
@@ -70,7 +80,14 @@ class SyncPeerConnection(
                     runCatching { json.decodeFromString(SyncEnvelope.serializer(), text) }.getOrNull()
                         ?: return@collect
                 when (envelope.type) {
-                    SyncMessageTypes.HELLO -> Unit // peer identity announced; nothing to do yet
+                    SyncMessageTypes.HELLO -> {
+                        val hello =
+                            runCatching { json.decodeFromString(HelloPayload.serializer(), envelope.payload) }
+                                .getOrNull() ?: return@collect
+                        peerDeviceId = hello.deviceId
+                        peerDeviceName = hello.serverName
+                        onHello(this, hello)
+                    }
 
                     SyncMessageTypes.SNAPSHOT -> {
                         val remote =

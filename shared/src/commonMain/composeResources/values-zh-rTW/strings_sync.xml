@@ -34,6 +34,10 @@
     <string name="settings_sync_connect_title">連線到裝置</string>
     <string name="settings_sync_connect_hint">裝置 IP 位址</string>
     <string name="settings_sync_connect_button">連線</string>
+    <string name="settings_sync_connecting">正在連線…</string>
+    <string name="settings_sync_connect_failed">連線失敗。請檢查 IP 和連接埠，並確認兩台裝置在同一網路，或連線自動發現的裝置。</string>
+    <string name="settings_sync_discover_title">附近的裝置</string>
+    <string name="settings_sync_discover_empty">未找到裝置。請確保其他裝置已開啟同步，且兩台裝置在同一網路。</string>
     <string name="settings_sync_last_sync">上次同步：%1$s</string>
     <string name="settings_sync_never_synced">尚未同步</string>
     <string name="settings_sync_edit_name">編輯裝置名稱</string>

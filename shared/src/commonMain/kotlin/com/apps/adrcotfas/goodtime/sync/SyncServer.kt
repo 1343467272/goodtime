@@ -39,7 +39,7 @@ class SyncServer(
     private val coroutineScope: CoroutineScope,
     private val json: Json,
     private val port: Int,
-    private val connectionFactory: suspend (WebSocketSession) -> SyncPeerConnection,
+    private val connectionFactory: suspend (WebSocketSession, String) -> SyncPeerConnection,
     private val log: Logger,
 ) {
     private var server: EmbeddedServer<*, *>? = null
@@ -65,7 +65,7 @@ class SyncServer(
                 install(WebSockets)
                 routing {
                     webSocket("/sync") {
-                        connectionFactory(this).start()
+                        connectionFactory(this, call.request.local.remoteHost).start()
                     }
                 }
             }

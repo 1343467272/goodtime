@@ -36,27 +36,38 @@ class SyncClient(
     private val host: String,
     private val port: Int,
     private val json: Json,
-    private val connectionFactory: suspend (WebSocketSession) -> SyncPeerConnection,
+    private val connectionFactory: suspend (WebSocketSession, String) -> SyncPeerConnection,
     private val coroutineScope: CoroutineScope,
     private val log: Logger,
 ) {
-    fun connect() {
-        coroutineScope.launch {
-            log.i { "connecting to peer $host:$port" }
-            val client =
-                HttpClient(CIO) {
-                    install(WebSockets)
-                }
-            try {
-                val session = client.webSocketSession("ws://$host:$port/sync")
-                connectionFactory(session).start()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                log.e { "sync connection to $host:$port failed: $e" }
-            } finally {
-                client.close()
+    /**
+     * Establishes the connection and returns once the handshake completes (success) or the
+     * attempt fails (false). The inbound frame pump keeps running in the background until the
+     * peer disconnects.
+     */
+    suspend fun connect(): Boolean {
+        log.i { "connecting to peer $host:$port" }
+        val client =
+            HttpClient(CIO) {
+                install(WebSockets)
             }
+        return try {
+            val session = client.webSocketSession("ws://$host:$port/sync")
+            val connection = connectionFactory(session, host)
+            coroutineScope.launch {
+                try {
+                    connection.start()
+                } finally {
+                    client.close()
+                }
+            }
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.e { "sync connection to $host:$port failed: $e" }
+            runCatching { client.close() }
+            false
         }
     }
 }

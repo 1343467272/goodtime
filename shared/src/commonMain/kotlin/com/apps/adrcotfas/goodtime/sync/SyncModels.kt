@@ -43,12 +43,25 @@ object SyncMessageTypes {
     const val SETTINGS = "settings"
 }
 
+/** A connected sync peer whose identity has been exchanged. */
+data class SyncPeerInfo(
+    val deviceId: String,
+    val deviceName: String,
+    val host: String,
+)
+
 /** Runtime diagnostics surfaced to the sync settings screen. */
 data class SyncStatus(
     val serverRunning: Boolean = false,
     val connectedPeers: Int = 0,
     /** Epoch millis of the last successful peer exchange. */
     val lastSyncTimestamp: Long = 0L,
+    /** Host of a manual connect attempt currently in progress, if any. */
+    val connectingTo: String? = null,
+    /** Human-readable failure of the last manual connect attempt, if any. */
+    val lastConnectError: String? = null,
+    /** Peers that announced themselves with HELLO and are still connected. */
+    val peers: List<SyncPeerInfo> = emptyList(),
 )
 
 @Serializable

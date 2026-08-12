@@ -22,7 +22,9 @@ import androidx.lifecycle.viewModelScope
 import com.apps.adrcotfas.goodtime.common.TimeFormatProvider
 import com.apps.adrcotfas.goodtime.data.settings.SettingsRepository
 import com.apps.adrcotfas.goodtime.data.settings.SyncSettings
+import com.apps.adrcotfas.goodtime.sync.DiscoveredPeer
 import com.apps.adrcotfas.goodtime.sync.SyncManager
+import com.apps.adrcotfas.goodtime.sync.SyncPeerInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -43,6 +45,11 @@ data class SyncUiState(
     val connectedPeers: Int = 0,
     val lastSyncTimestamp: Long = 0L,
     val lastSyncLabel: String? = null,
+    val connecting: Boolean = false,
+    val connectFailed: Boolean = false,
+    val connectErrorDetail: String? = null,
+    val peers: List<SyncPeerInfo> = emptyList(),
+    val discoveredPeers: List<DiscoveredPeer> = emptyList(),
 )
 
 class SyncViewModel(
@@ -62,8 +69,9 @@ class SyncViewModel(
             combine(
                 flow = settingsRepository.settings.map { it.syncSettings }.distinctUntilChanged(),
                 flow2 = syncManager.status,
-            ) { syncSettings, status -> syncSettings to status }
-                .collect { (syncSettings, status) ->
+                flow3 = syncManager.discoveredPeers,
+            ) { syncSettings, status, discovered -> Triple(syncSettings, status, discovered) }
+                .collect { (syncSettings, status, discovered) ->
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -72,6 +80,11 @@ class SyncViewModel(
                             connectedPeers = status.connectedPeers,
                             lastSyncTimestamp = status.lastSyncTimestamp,
                             lastSyncLabel = status.lastSyncTimestamp.formatSyncTime(timeFormatProvider),
+                            connecting = status.connectingTo != null,
+                            connectFailed = status.lastConnectError != null,
+                            connectErrorDetail = status.lastConnectError,
+                            peers = status.peers,
+                            discoveredPeers = discovered,
                         )
                     }
                 }
@@ -109,8 +122,36 @@ class SyncViewModel(
 
     fun connectTo(host: String) {
         viewModelScope.launch {
-            syncManager.ensureStarted()
-            syncManager.connectTo(host)
+            val ok = syncManager.connectTo(host)
+            if (!ok) {
+                _uiState.update {
+                    it.copy(
+                        connectFailed = true,
+                        connectErrorDetail = syncManager.status.value.lastConnectError,
+                    )
+                }
+            }
+        }
+    }
+
+    fun connectTo(peer: DiscoveredPeer) {
+        viewModelScope.launch {
+            val ok = syncManager.connectTo(peer.host, peer.port)
+            if (!ok) {
+                _uiState.update {
+                    it.copy(
+                        connectFailed = true,
+                        connectErrorDetail = syncManager.status.value.lastConnectError,
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearConnectError() {
+        syncManager.clearConnectError()
+        _uiState.update {
+            it.copy(connectFailed = false, connectErrorDetail = null)
         }
     }
 
