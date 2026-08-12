@@ -117,6 +117,27 @@ data class TimerStyleData(
     val showBreakBudget: Boolean = true,
 ) {
     fun inUseFontSize() = fontSize
+
+    /**
+     * This device's copy of the timer style as published in [SyncedSettings]. The size
+     * fields ([minSize], [maxSize], [fontSize], [currentScreenWidth]) are screen/device
+     * specific and must not be shared with peers, so they are zeroed out.
+     */
+    fun syncedCopy() = copy(minSize = 0f, maxSize = 0f, fontSize = 0f, currentScreenWidth = 0f)
+
+    /**
+     * Merges a synced timer style into this device's local one: the shared design fields
+     * ([colorIndex], [fontWeight], [minutesOnly], [showStatus], [showStreak],
+     * [showBreakBudget]) come from [remote] while the device-specific sizes are kept.
+     */
+    fun applySyncedDesign(remote: TimerStyleData) = copy(
+        colorIndex = remote.colorIndex,
+        fontWeight = remote.fontWeight,
+        minutesOnly = remote.minutesOnly,
+        showStatus = remote.showStatus,
+        showStreak = remote.showStreak,
+        showBreakBudget = remote.showBreakBudget,
+    )
 }
 
 @Serializable
@@ -157,6 +178,11 @@ data class SyncSettings(
     val deviceId: String = "",
     /** Epoch millis of the last successful sync, used for diagnostics/UI. */
     val lastSyncTimestamp: Long = 0L,
+    /**
+     * Hosts of peers this device connected to (outbound). They are reconnected automatically
+     * when sync starts, so a previously paired device does not need to be re-selected by hand.
+     */
+    val peerHosts: List<String> = emptyList(),
 ) {
     companion object {
         const val DEFAULT_PORT = 46371
@@ -210,7 +236,7 @@ data class SyncedSettings(
             breakBudgetData = appSettings.breakBudgetData,
             productivityReminderSettings = appSettings.productivityReminderSettings,
             uiSettings = appSettings.uiSettings,
-            timerStyle = appSettings.timerStyle,
+            timerStyle = appSettings.timerStyle.syncedCopy(),
             updatedAt = updatedAt,
         )
     }

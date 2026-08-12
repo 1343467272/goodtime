@@ -123,4 +123,52 @@ class SettingsRepositoryImplTest : RobolectricTest() {
         assertEquals(42L, settings.lastInsertedSessionId)
         assertEquals(true, settings.autoStartBreak)
     }
+
+    @Test
+    fun `peer hosts round-trip`() = runTest {
+        repo.setSyncSettings(
+            SyncSettings(peerHosts = listOf("192.168.1.10", "192.168.1.11")),
+        )
+        assertEquals(
+            listOf("192.168.1.10", "192.168.1.11"),
+            repo.settings.first().syncSettings.peerHosts,
+        )
+    }
+
+    @Test
+    fun `applying synced settings keeps local timer font sizes but takes design fields`() = runTest {
+        repo.updateTimerStyle {
+            it.copy(
+                minSize = 30f,
+                maxSize = 45f,
+                fontSize = 40f,
+                currentScreenWidth = 800f,
+                colorIndex = 2,
+                fontWeight = 400,
+            )
+        }
+        repo.applySyncedSettings(
+            SyncedSettings(
+                timerStyle =
+                TimerStyleData(
+                    colorIndex = 5,
+                    minSize = 10f,
+                    maxSize = 15f,
+                    fontSize = 12f,
+                    currentScreenWidth = 400f,
+                    fontWeight = 900,
+                ),
+                updatedAt = 1L,
+            ),
+        )
+        val style = repo.settings.first().timerStyle
+        // device-specific sizes survive
+        assertEquals(30f, style.minSize)
+        assertEquals(45f, style.maxSize)
+        assertEquals(40f, style.fontSize)
+        assertEquals(800f, style.currentScreenWidth)
+        // shared design fields are taken from the peer
+        assertEquals(5, style.colorIndex)
+        assertEquals(900, style.fontWeight)
+    }
 }

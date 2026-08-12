@@ -395,7 +395,8 @@ class SettingsRepositoryImpl(
         setBreakBudgetData(syncedSettings.breakBudgetData)
         updateReminderSettings { syncedSettings.productivityReminderSettings }
         updateUiSettings { syncedSettings.uiSettings }
-        updateTimerStyle { syncedSettings.timerStyle }
+        // Sync only the shared design fields; each device keeps its own font sizes.
+        updateTimerStyle { it.applySyncedDesign(syncedSettings.timerStyle) }
         if (syncedSettings.labelName.isNotEmpty()) {
             activateLabelWithName(syncedSettings.labelName)
         }

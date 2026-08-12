@@ -18,7 +18,9 @@
 package com.apps.adrcotfas.goodtime.sync
 
 import com.apps.adrcotfas.goodtime.data.model.Session
+import com.apps.adrcotfas.goodtime.data.settings.AppSettings
 import com.apps.adrcotfas.goodtime.data.settings.SyncedSettings
+import com.apps.adrcotfas.goodtime.data.settings.TimerStyleData
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -101,5 +103,28 @@ class SyncEngineTest {
         val remote = SyncedSettings(workdayStart = 1, updatedAt = 100L)
         assertEquals(remote, engine.mergeSyncedSettings(null, remote))
         assertEquals(remote, engine.mergeSyncedSettings(remote, null))
+    }
+
+    @Test
+    fun `synced settings exclude device specific timer sizes but keep design fields`() {
+        val appSettings =
+            AppSettings(
+                timerStyle =
+                TimerStyleData(
+                    colorIndex = 3,
+                    minSize = 10f,
+                    maxSize = 20f,
+                    fontSize = 18f,
+                    currentScreenWidth = 400f,
+                    fontWeight = 700,
+                ),
+            )
+        val synced = SyncedSettings.from(appSettings, updatedAt = 100L)
+        assertEquals(0f, synced.timerStyle.minSize)
+        assertEquals(0f, synced.timerStyle.maxSize)
+        assertEquals(0f, synced.timerStyle.fontSize)
+        assertEquals(0f, synced.timerStyle.currentScreenWidth)
+        assertEquals(3, synced.timerStyle.colorIndex)
+        assertEquals(700, synced.timerStyle.fontWeight)
     }
 }

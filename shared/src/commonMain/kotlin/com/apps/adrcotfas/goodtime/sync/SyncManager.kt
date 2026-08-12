@@ -114,6 +114,7 @@ class SyncManager(
             ).also { it.start() }
         startDiscovery()
         startCollectors()
+        startAutoReconnect()
         _status.update { it.copy(serverRunning = true) }
         log.i { "sync started, deviceId=$deviceId" }
     }
@@ -177,9 +178,13 @@ class SyncManager(
      * (with a timeout), updating [SyncStatus] so the UI can show progress and errors.
      *
      * @param port port of the peer's sync server; defaults to this device's configured port
+     * @param reportError whether failures are surfaced to the UI (e.g. auto-reconnects run
+     * silently and only log)
      */
-    suspend fun connectTo(host: String, port: Int? = null): Boolean {
-        _status.update { it.copy(connectingTo = host, lastConnectError = null) }
+    suspend fun connectTo(host: String, port: Int? = null, reportError: Boolean = true): Boolean {
+        if (reportError) {
+            _status.update { it.copy(connectingTo = host, lastConnectError = null) }
+        }
         val result =
             try {
                 withTimeout(CONNECT_TIMEOUT_MS) {
@@ -195,32 +200,68 @@ class SyncManager(
                 }
             } catch (e: TimeoutCancellationException) {
                 log.e { "connect to $host timed out" }
-                _status.update {
-                    it.copy(
-                        connectingTo = null,
-                        lastConnectError = e.message ?: "Connection timed out",
-                    )
+                if (reportError) {
+                    _status.update {
+                        it.copy(
+                            connectingTo = null,
+                            lastConnectError = e.message ?: "Connection timed out",
+                        )
+                    }
                 }
                 return false
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 log.e { "connect to $host failed: $e" }
-                _status.update {
-                    it.copy(
-                        connectingTo = null,
-                        lastConnectError = e.message ?: "Connection failed",
-                    )
+                if (reportError) {
+                    _status.update {
+                        it.copy(
+                            connectingTo = null,
+                            lastConnectError = e.message ?: "Connection failed",
+                        )
+                    }
                 }
                 return false
             }
-        _status.update { it.copy(connectingTo = null) }
+        if (reportError) {
+            _status.update { it.copy(connectingTo = null) }
+        }
         if (result) {
             log.i { "connected to $host" }
-        } else {
+            rememberPeer(host)
+        } else if (reportError) {
             _status.update { it.copy(lastConnectError = "Connection failed") }
         }
         return result
+    }
+
+    /**
+     * Remembers a peer we connected to so it can be reconnected automatically next time
+     * sync starts. Most recently used hosts come first; the list is capped.
+     */
+    private suspend fun rememberPeer(host: String) {
+        val current = settingsRepo.settings.first().syncSettings
+        val updated = (listOf(host) + current.peerHosts.filterNot { it == host }).take(MAX_SAVED_PEERS)
+        if (updated != current.peerHosts) {
+            settingsRepo.setSyncSettings(current.copy(peerHosts = updated))
+        }
+    }
+
+    /**
+     * Reconnects to the peers this device has connected to before, silently. Skips hosts we
+     * are already connected to (e.g. the peer connected to us first) and our own addresses.
+     */
+    private suspend fun startAutoReconnect() {
+        val settings = settingsRepo.settings.first().syncSettings
+        val localIps = getLocalIpAddresses().toSet()
+        val connectedHosts = connectionMutex.withLock { connections.map { it.host }.toSet() }
+        settings.peerHosts
+            .filterNot { it in connectedHosts || it in localIps }
+            .forEach { host ->
+                coroutineScope.launch {
+                    connectTo(host, reportError = false)
+                }
+            }
     }
 
     fun clearConnectError() {
@@ -448,5 +489,6 @@ class SyncManager(
 
     companion object {
         private const val CONNECT_TIMEOUT_MS = 10_000L
+        private const val MAX_SAVED_PEERS = 8
     }
 }
