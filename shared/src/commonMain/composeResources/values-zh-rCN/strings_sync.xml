@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Goodtime Productivity
+    Copyright (C) 2025 Adrian Cotfas
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<resources>
+    <string name="settings_sync">同步</string>
+    <string name="settings_sync_status">状态</string>
+    <string name="settings_sync_desc">通过本地网络在设备之间共享会话、设置和计时器实时状态</string>
+    <string name="settings_sync_enable_title">与附近设备同步</string>
+    <string name="settings_sync_enable_desc">所有设备必须连接到同一 Wi-Fi 网络，并使用相同端口</string>
+    <string name="settings_sync_device_name">设备名称</string>
+    <string name="settings_sync_device_name_desc">对其他设备可见</string>
+    <string name="settings_sync_port">端口</string>
+    <string name="settings_sync_port_desc">所有同步设备必须使用相同端口</string>
+    <string name="settings_sync_device_id">设备 ID</string>
+    <string name="settings_sync_server_running">服务器正在运行，端口 %1$d</string>
+    <string name="settings_sync_server_starting">正在启动服务器…</string>
+    <string name="settings_sync_server_stopped">同步已停用</string>
+    <string name="settings_sync_connected_devices">已连接设备：%1$d</string>
+    <string name="settings_sync_connect_title">连接到设备</string>
+    <string name="settings_sync_connect_hint">设备 IP 地址</string>
+    <string name="settings_sync_connect_button">连接</string>
+    <string name="settings_sync_last_sync">上次同步：%1$s</string>
+    <string name="settings_sync_never_synced">尚未同步</string>
+    <string name="settings_sync_edit_name">编辑设备名称</string>
+    <string name="settings_sync_edit_port">编辑端口</string>
+</resources>

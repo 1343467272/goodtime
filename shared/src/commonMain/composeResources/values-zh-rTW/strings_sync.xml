@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Goodtime Productivity
+    Copyright (C) 2025 Adrian Cotfas
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<resources>
+    <string name="settings_sync">同步</string>
+    <string name="settings_sync_status">狀態</string>
+    <string name="settings_sync_desc">透過本機網路在裝置之間分享會話、設定和計時器即時狀態</string>
+    <string name="settings_sync_enable_title">與附近的裝置同步</string>
+    <string name="settings_sync_enable_desc">所有裝置必須連線到相同的 Wi-Fi 網路，並使用相同的連接埠</string>
+    <string name="settings_sync_device_name">裝置名稱</string>
+    <string name="settings_sync_device_name_desc">對其他裝置可見</string>
+    <string name="settings_sync_port">連接埠</string>
+    <string name="settings_sync_port_desc">所有同步的裝置必須使用相同的連接埠</string>
+    <string name="settings_sync_device_id">裝置 ID</string>
+    <string name="settings_sync_server_running">伺服器正在執行，連接埠 %1$d</string>
+    <string name="settings_sync_server_starting">正在啟動伺服器…</string>
+    <string name="settings_sync_server_stopped">同步已停用</string>
+    <string name="settings_sync_connected_devices">已連線裝置：%1$d</string>
+    <string name="settings_sync_connect_title">連線到裝置</string>
+    <string name="settings_sync_connect_hint">裝置 IP 位址</string>
+    <string name="settings_sync_connect_button">連線</string>
+    <string name="settings_sync_last_sync">上次同步：%1$s</string>
+    <string name="settings_sync_never_synced">尚未同步</string>
+    <string name="settings_sync_edit_name">編輯裝置名稱</string>
+    <string name="settings_sync_edit_port">編輯連接埠</string>
+</resources>
