@@ -34,9 +34,9 @@
 
 # ===== Ktor =====
 # io.ktor.util.debug.IntellijIdeaDebugDetector.isDebuggerConnected() is backed
-# by a lazy initializer that calls JVM-only java.lang.management classes that
-# do not exist on Android. -dontwarn is not enough (AGP treats missing classes
-# as errors); folding the getter to false lets R8 remove that code entirely.
--assumevalues class io.ktor.util.debug.IntellijIdeaDebugDetector {
-    boolean isDebuggerConnected() return false;
-}
+# by a lazy initializer that references JVM-only java.lang.management classes
+# that do not exist on Android. R8 in full mode treats that as a hard error
+# (no -dontwarn / -assumevalues workaround). Fixed by shipping minimal stub
+# classes in androidApp/src/main/kotlin/java/lang/management/.
+# The getter is still folded away at runtime: the stub returns null, ktor's
+# lambda wraps the call in try/catch and evaluates to false.
