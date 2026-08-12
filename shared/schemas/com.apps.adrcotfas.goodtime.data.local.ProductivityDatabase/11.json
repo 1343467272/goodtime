@@ -1,0 +1,385 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 11,
+    "identityHash": "5fb105ceb4f31c931c9aa896b9eca204",
+    "entities": [
+      {
+        "tableName": "localLabel",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`name` TEXT NOT NULL, `colorIndex` INTEGER NOT NULL DEFAULT 24, `orderIndex` INTEGER NOT NULL DEFAULT 9223372036854775807, `useDefaultTimeProfile` INTEGER NOT NULL DEFAULT 1, `timerProfileName` TEXT DEFAULT '25/5', `isCountdown` INTEGER NOT NULL DEFAULT 1, `workDuration` INTEGER NOT NULL DEFAULT 25, `isBreakEnabled` INTEGER NOT NULL DEFAULT 1, `breakDuration` INTEGER NOT NULL DEFAULT 5, `isLongBreakEnabled` INTEGER NOT NULL DEFAULT 0, `longBreakDuration` INTEGER NOT NULL DEFAULT 15, `sessionsBeforeLongBreak` INTEGER NOT NULL DEFAULT 4, `workBreakRatio` INTEGER NOT NULL DEFAULT 3, `isArchived` INTEGER NOT NULL DEFAULT 0, `updatedAt` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`name`), FOREIGN KEY(`timerProfileName`) REFERENCES `localTimerProfile`(`name`) ON UPDATE CASCADE ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "colorIndex",
+            "columnName": "colorIndex",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "24"
+          },
+          {
+            "fieldPath": "orderIndex",
+            "columnName": "orderIndex",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "9223372036854775807"
+          },
+          {
+            "fieldPath": "useDefaultTimeProfile",
+            "columnName": "useDefaultTimeProfile",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "timerProfileName",
+            "columnName": "timerProfileName",
+            "affinity": "TEXT",
+            "defaultValue": "'25/5'"
+          },
+          {
+            "fieldPath": "isCountdown",
+            "columnName": "isCountdown",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "workDuration",
+            "columnName": "workDuration",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "25"
+          },
+          {
+            "fieldPath": "isBreakEnabled",
+            "columnName": "isBreakEnabled",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "breakDuration",
+            "columnName": "breakDuration",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "5"
+          },
+          {
+            "fieldPath": "isLongBreakEnabled",
+            "columnName": "isLongBreakEnabled",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "longBreakDuration",
+            "columnName": "longBreakDuration",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "15"
+          },
+          {
+            "fieldPath": "sessionsBeforeLongBreak",
+            "columnName": "sessionsBeforeLongBreak",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "4"
+          },
+          {
+            "fieldPath": "workBreakRatio",
+            "columnName": "workBreakRatio",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "3"
+          },
+          {
+            "fieldPath": "isArchived",
+            "columnName": "isArchived",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "name"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_localLabel_name_isArchived",
+            "unique": true,
+            "columnNames": [
+              "name",
+              "isArchived"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_localLabel_name_isArchived` ON `${TABLE_NAME}` (`name`, `isArchived`)"
+          },
+          {
+            "name": "index_localLabel_timerProfileName",
+            "unique": false,
+            "columnNames": [
+              "timerProfileName"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_localLabel_timerProfileName` ON `${TABLE_NAME}` (`timerProfileName`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "localTimerProfile",
+            "onDelete": "SET NULL",
+            "onUpdate": "CASCADE",
+            "columns": [
+              "timerProfileName"
+            ],
+            "referencedColumns": [
+              "name"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "localSession",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `timestamp` INTEGER NOT NULL, `duration` INTEGER NOT NULL, `interruptions` INTEGER NOT NULL DEFAULT 0, `labelName` TEXT NOT NULL DEFAULT 'PRODUCTIVITY_DEFAULT_LABEL', `notes` TEXT NOT NULL DEFAULT '', `isWork` INTEGER NOT NULL DEFAULT 1, `isArchived` INTEGER NOT NULL DEFAULT 0, `syncId` TEXT NOT NULL DEFAULT '', `updatedAt` INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(`labelName`, `isArchived`) REFERENCES `localLabel`(`name`, `isArchived`) ON UPDATE CASCADE ON DELETE SET DEFAULT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "duration",
+            "columnName": "duration",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "interruptions",
+            "columnName": "interruptions",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "labelName",
+            "columnName": "labelName",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'PRODUCTIVITY_DEFAULT_LABEL'"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "isWork",
+            "columnName": "isWork",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "isArchived",
+            "columnName": "isArchived",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "syncId",
+            "columnName": "syncId",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_localSession_labelName_isArchived",
+            "unique": false,
+            "columnNames": [
+              "labelName",
+              "isArchived"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_localSession_labelName_isArchived` ON `${TABLE_NAME}` (`labelName`, `isArchived`)"
+          },
+          {
+            "name": "index_localSession_isArchived",
+            "unique": false,
+            "columnNames": [
+              "isArchived"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_localSession_isArchived` ON `${TABLE_NAME}` (`isArchived`)"
+          },
+          {
+            "name": "index_localSession_labelName",
+            "unique": false,
+            "columnNames": [
+              "labelName"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_localSession_labelName` ON `${TABLE_NAME}` (`labelName`)"
+          },
+          {
+            "name": "index_localSession_isWork",
+            "unique": false,
+            "columnNames": [
+              "isWork"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_localSession_isWork` ON `${TABLE_NAME}` (`isWork`)"
+          },
+          {
+            "name": "index_localSession_syncId",
+            "unique": true,
+            "columnNames": [
+              "syncId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_localSession_syncId` ON `${TABLE_NAME}` (`syncId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "localLabel",
+            "onDelete": "SET DEFAULT",
+            "onUpdate": "CASCADE",
+            "columns": [
+              "labelName",
+              "isArchived"
+            ],
+            "referencedColumns": [
+              "name",
+              "isArchived"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "localTimerProfile",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`name` TEXT NOT NULL, `isCountdown` INTEGER NOT NULL DEFAULT 1, `workDuration` INTEGER NOT NULL DEFAULT 25, `isBreakEnabled` INTEGER NOT NULL DEFAULT 1, `breakDuration` INTEGER NOT NULL DEFAULT 5, `isLongBreakEnabled` INTEGER NOT NULL DEFAULT 0, `longBreakDuration` INTEGER NOT NULL DEFAULT 15, `sessionsBeforeLongBreak` INTEGER NOT NULL DEFAULT 4, `workBreakRatio` INTEGER NOT NULL DEFAULT 3, `updatedAt` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`name`))",
+        "fields": [
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isCountdown",
+            "columnName": "isCountdown",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "workDuration",
+            "columnName": "workDuration",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "25"
+          },
+          {
+            "fieldPath": "isBreakEnabled",
+            "columnName": "isBreakEnabled",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "breakDuration",
+            "columnName": "breakDuration",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "5"
+          },
+          {
+            "fieldPath": "isLongBreakEnabled",
+            "columnName": "isLongBreakEnabled",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "longBreakDuration",
+            "columnName": "longBreakDuration",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "15"
+          },
+          {
+            "fieldPath": "sessionsBeforeLongBreak",
+            "columnName": "sessionsBeforeLongBreak",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "4"
+          },
+          {
+            "fieldPath": "workBreakRatio",
+            "columnName": "workBreakRatio",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "3"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "name"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5fb105ceb4f31c931c9aa896b9eca204')"
+    ]
+  }
+}

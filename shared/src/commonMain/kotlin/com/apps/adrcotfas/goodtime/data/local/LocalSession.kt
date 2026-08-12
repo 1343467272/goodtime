@@ -40,6 +40,7 @@ import com.apps.adrcotfas.goodtime.data.model.Label.Companion.DEFAULT_LABEL_NAME
         Index(value = ["isArchived"]),
         Index(value = ["labelName"]),
         Index(value = ["isWork"]),
+        Index(value = ["syncId"], unique = true),
     ],
 )
 data class LocalSession(
@@ -57,4 +58,16 @@ data class LocalSession(
     val isWork: Boolean,
     @ColumnInfo(defaultValue = "0")
     val isArchived: Boolean,
+    /**
+     * Stable, device-independent identity used by the LAN sync engine. Empty for
+     * sessions created before the field existed or never synced.
+     */
+    @ColumnInfo(defaultValue = "")
+    val syncId: String = "",
+    /**
+     * Wall-clock epoch millis of the last local modification, used for
+     * last-write-wins conflict resolution during sync.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val updatedAt: Long = 0,
 )

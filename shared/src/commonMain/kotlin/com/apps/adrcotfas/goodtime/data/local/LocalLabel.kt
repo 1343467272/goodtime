@@ -75,4 +75,10 @@ data class LocalLabel(
     val workBreakRatio: Int,
     @ColumnInfo(defaultValue = "0")
     val isArchived: Boolean,
+    /**
+     * Wall-clock epoch millis of the last local modification, used for
+     * last-write-wins conflict resolution during sync.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val updatedAt: Long = 0,
 )

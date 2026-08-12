@@ -18,6 +18,8 @@
 package com.apps.adrcotfas.goodtime.data.local
 
 import androidx.paging.PagingSource
+import com.apps.adrcotfas.goodtime.bl.TimeProvider
+import com.apps.adrcotfas.goodtime.bl.generateUuid
 import com.apps.adrcotfas.goodtime.data.model.Label
 import com.apps.adrcotfas.goodtime.data.model.Session
 import com.apps.adrcotfas.goodtime.data.model.TimerProfile
@@ -74,7 +76,7 @@ internal class LocalDataRepositoryImpl(
                         workDuration = 25,
                         breakDuration = 5,
                         isLongBreakEnabled = false,
-                    ).toLocal(),
+                    ).toLocal().copy(updatedAt = TimeProvider.now()),
                 )
                 timerProfileDao.insert(
                     TimerProfile(
@@ -82,7 +84,7 @@ internal class LocalDataRepositoryImpl(
                         workDuration = 50,
                         breakDuration = 10,
                         isLongBreakEnabled = false,
-                    ).toLocal(),
+                    ).toLocal().copy(updatedAt = TimeProvider.now()),
                 )
                 timerProfileDao.insert(
                     TimerProfile(
@@ -92,30 +94,40 @@ internal class LocalDataRepositoryImpl(
                         isLongBreakEnabled = true,
                         longBreakDuration = 15,
                         sessionsBeforeLongBreak = 4,
-                    ).toLocal(),
+                    ).toLocal().copy(updatedAt = TimeProvider.now()),
                 )
                 timerProfileDao.insert(
                     TimerProfile(
                         name = LocalTimerProfile.THIRD_TIME_PROFILE_NAME,
                         isCountdown = false,
                         workBreakRatio = 3,
-                    ).toLocal(),
+                    ).toLocal().copy(updatedAt = TimeProvider.now()),
                 )
                 settingsRepo.setTimeProfilesInitialized(true)
             }
 
-            val localLabel = Label.defaultLabel().toLocal()
+            val localLabel = Label.defaultLabel().toLocal().copy(updatedAt = TimeProvider.now())
             labelDao.insert(localLabel)
         }
     }
 
-    override suspend fun insertSession(session: Session): Long = sessionDao.insert(session.toLocal())
+    override suspend fun insertSession(session: Session): Long {
+        val now = TimeProvider.now()
+        val newSession = session.copy(
+            syncId = if (session.syncId.isEmpty()) generateUuid() else session.syncId,
+            updatedAt = now,
+        )
+        return sessionDao.insert(newSession.toLocal())
+    }
 
     override suspend fun updateSession(
         id: Long,
         newSession: Session,
     ) {
-        val localSession = newSession.toLocal()
+        val localSession = newSession.copy(
+            syncId = if (newSession.syncId.isEmpty()) generateUuid() else newSession.syncId,
+            updatedAt = TimeProvider.now(),
+        ).toLocal()
         sessionDao.update(
             newTimestamp = localSession.timestamp,
             newDuration = localSession.duration,
@@ -123,6 +135,7 @@ internal class LocalDataRepositoryImpl(
             newLabel = localSession.labelName,
             newNotes = localSession.notes,
             newIsWork = localSession.isWork,
+            newUpdatedAt = localSession.updatedAt,
             id = id,
         )
     }
@@ -131,7 +144,7 @@ internal class LocalDataRepositoryImpl(
         newLabel: String,
         ids: List<Long>,
     ) {
-        sessionDao.updateLabelByIds(newLabel, ids)
+        sessionDao.updateLabelByIds(newLabel, TimeProvider.now(), ids)
     }
 
     override suspend fun updateSessionsLabelByIdsExcept(
@@ -140,7 +153,7 @@ internal class LocalDataRepositoryImpl(
         selectedLabels: List<String>,
         considerBreaks: Boolean,
     ) {
-        sessionDao.updateLabelByIdsExcept(newLabel, unselectedIds, selectedLabels, considerBreaks)
+        sessionDao.updateLabelByIdsExcept(newLabel, TimeProvider.now(), unselectedIds, selectedLabels, considerBreaks)
     }
 
     override fun selectAllSessions(): Flow<List<Session>> = daos
@@ -201,24 +214,25 @@ internal class LocalDataRepositoryImpl(
         sessionDao.deleteAll()
     }
 
-    override suspend fun insertLabel(label: Label): Long = labelDao.insert(label.toLocal())
+    override suspend fun insertLabel(label: Label): Long = labelDao.insert(label.toLocal().copy(updatedAt = TimeProvider.now()))
 
     override suspend fun insertLabelAndBulkRearrange(
         label: Label,
         labelsToUpdate: List<Pair<String, Long>>,
     ) {
-        labelDao.insertLabelAndBulkRearrange(label.toLocal(), labelsToUpdate)
+        val now = TimeProvider.now()
+        labelDao.insertLabelAndBulkRearrange(label.toLocal().copy(updatedAt = now), labelsToUpdate, now)
     }
 
     override suspend fun updateLabelOrderIndex(
         name: String,
         newOrderIndex: Long,
     ) {
-        labelDao.updateOrderIndex(newOrderIndex.toInt(), name)
+        labelDao.updateOrderIndex(newOrderIndex.toInt(), TimeProvider.now(), name)
     }
 
     override suspend fun bulkUpdateLabelOrderIndex(labelsToUpdate: List<Pair<String, Long>>) {
-        labelDao.bulkUpdateLabelOrderIndex(labelsToUpdate)
+        labelDao.bulkUpdateLabelOrderIndex(labelsToUpdate, TimeProvider.now())
     }
 
     override suspend fun updateLabel(
@@ -226,7 +240,7 @@ internal class LocalDataRepositoryImpl(
         newLabel: Label,
     ) {
         if (newLabel.name.isEmpty()) return
-        val localLabel = newLabel.toLocal()
+        val localLabel = newLabel.toLocal().copy(updatedAt = TimeProvider.now())
         labelDao.updateLabel(
             newName = localLabel.name,
             newColorIndex = localLabel.colorIndex,
@@ -240,6 +254,7 @@ internal class LocalDataRepositoryImpl(
             newLongBreakDuration = localLabel.longBreakDuration,
             newSessionsBeforeLongBreak = localLabel.sessionsBeforeLongBreak,
             newWorkBreakRatio = localLabel.workBreakRatio,
+            newUpdatedAt = localLabel.updatedAt,
             name = name,
         )
     }
@@ -254,7 +269,7 @@ internal class LocalDataRepositoryImpl(
         name: String,
         newIsArchived: Boolean,
     ) {
-        labelDao.updateIsArchived(newIsArchived, name)
+        labelDao.updateIsArchived(newIsArchived, TimeProvider.now(), name)
     }
 
     override fun selectLabelByName(name: String): Flow<Label?> = daos.flatMapLatest { d ->
@@ -303,11 +318,11 @@ internal class LocalDataRepositoryImpl(
     }
 
     override suspend fun insertTimerProfile(profile: TimerProfile) {
-        timerProfileDao.insert(profile.toLocal())
+        timerProfileDao.insert(profile.toLocal().copy(updatedAt = TimeProvider.now()))
     }
 
     override suspend fun insertTimerProfileAndSetDefault(profile: TimerProfile) {
-        timerProfileDao.insertTimerProfileAndSetDefault(profile.toLocal())
+        timerProfileDao.insertTimerProfileAndSetDefault(profile.toLocal().copy(updatedAt = TimeProvider.now()))
     }
 
     override suspend fun deleteTimerProfile(name: String) {
@@ -325,4 +340,94 @@ internal class LocalDataRepositoryImpl(
                 it.toExternal()
             }
         }
+
+    override suspend fun selectAllSessionsOnce(): List<Session> =
+        sessionDao.selectAllOnce().map { it.toExternal() }
+
+    override suspend fun selectAllLabelsOnce(): List<Label> {
+        val localLabels = labelDao.selectAllOnce()
+        val timerProfileNames = localLabels.mapNotNull { it.timerProfileName }.distinct()
+        if (timerProfileNames.isEmpty()) {
+            return localLabels.map { it.toExternal() }
+        }
+        val timerProfiles = timerProfileDao.selectAllOnce().associateBy { it.name }
+        return localLabels.map { localLabel ->
+            localLabel.toExternal(timerProfiles[localLabel.timerProfileName]?.toExternal())
+        }
+    }
+
+    override suspend fun selectAllTimerProfilesOnce(): List<TimerProfile> =
+        timerProfileDao.selectAllOnce().map { it.toExternal() }
+
+    override suspend fun applySyncedSessions(
+        sessions: List<Session>,
+        deletedSyncIds: List<String>,
+    ) {
+        deletedSyncIds.forEach { sessionDao.deleteBySyncId(it) }
+        for (s in sessions) {
+            val local = s.toLocal()
+            if (local.syncId.isEmpty()) continue
+            val updated = sessionDao.updateBySyncId(
+                newTimestamp = local.timestamp,
+                newDuration = local.duration,
+                newInterruptions = local.interruptions,
+                newLabel = local.labelName,
+                newNotes = local.notes,
+                newIsWork = local.isWork,
+                newIsArchived = local.isArchived,
+                newUpdatedAt = local.updatedAt,
+                syncId = local.syncId,
+            )
+            if (updated == 0) {
+                sessionDao.insert(local.copy(id = 0))
+            }
+        }
+    }
+
+    override suspend fun applySyncedLabels(labels: List<Label>) {
+        for (l in labels) {
+            val local = l.toLocal()
+            val updated = labelDao.updateLabelSync(
+                newColorIndex = local.colorIndex,
+                newOrderIndex = local.orderIndex,
+                newUseDefaultTimeProfile = local.useDefaultTimeProfile,
+                newTimerProfileName = local.timerProfileName,
+                newIsCountdown = local.isCountdown,
+                newWorkDuration = local.workDuration,
+                newIsBreakEnabled = local.isBreakEnabled,
+                newBreakDuration = local.breakDuration,
+                newIsLongBreakEnabled = local.isLongBreakEnabled,
+                newLongBreakDuration = local.longBreakDuration,
+                newSessionsBeforeLongBreak = local.sessionsBeforeLongBreak,
+                newWorkBreakRatio = local.workBreakRatio,
+                newIsArchived = local.isArchived,
+                newUpdatedAt = local.updatedAt,
+                name = local.name,
+            )
+            if (updated == 0) {
+                labelDao.insert(local)
+            }
+        }
+    }
+
+    override suspend fun applySyncedTimerProfiles(profiles: List<TimerProfile>) {
+        for (p in profiles) {
+            val local = p.toLocal()
+            val updated = timerProfileDao.updateProfileSync(
+                newIsCountdown = local.isCountdown,
+                newWorkDuration = local.workDuration,
+                newIsBreakEnabled = local.isBreakEnabled,
+                newBreakDuration = local.breakDuration,
+                newIsLongBreakEnabled = local.isLongBreakEnabled,
+                newLongBreakDuration = local.longBreakDuration,
+                newSessionsBeforeLongBreak = local.sessionsBeforeLongBreak,
+                newWorkBreakRatio = local.workBreakRatio,
+                newUpdatedAt = local.updatedAt,
+                name = local.name,
+            )
+            if (updated == 0) {
+                timerProfileDao.insert(local)
+            }
+        }
+    }
 }

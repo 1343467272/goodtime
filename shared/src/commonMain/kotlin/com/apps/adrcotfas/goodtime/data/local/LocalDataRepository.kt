@@ -135,4 +135,19 @@ interface LocalDataRepository {
     suspend fun selectTimerProfile(name: String): Flow<TimerProfile?>
 
     suspend fun selectAllTimerProfiles(): Flow<List<TimerProfile>>
+    
+    suspend fun selectAllSessionsOnce(): List<Session>
+    
+    suspend fun selectAllLabelsOnce(): List<Label>
+    
+    suspend fun selectAllTimerProfilesOnce(): List<TimerProfile>
+    
+    suspend fun applySyncedSessions(
+        sessions: List<Session>,
+        deletedSyncIds: List<String>,
+    )
+    
+    suspend fun applySyncedLabels(labels: List<Label>)
+    
+    suspend fun applySyncedTimerProfiles(profiles: List<TimerProfile>)
 }

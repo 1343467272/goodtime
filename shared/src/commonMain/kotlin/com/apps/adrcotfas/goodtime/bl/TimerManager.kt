@@ -21,7 +21,9 @@ import co.touchlab.kermit.Logger
 import com.apps.adrcotfas.goodtime.data.local.LocalDataRepository
 import com.apps.adrcotfas.goodtime.data.model.Session
 import com.apps.adrcotfas.goodtime.data.settings.AppSettings
+import com.apps.adrcotfas.goodtime.data.settings.PersistedTimerState
 import com.apps.adrcotfas.goodtime.data.settings.SettingsRepository
+import com.apps.adrcotfas.goodtime.sync.SyncedTimerState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -57,6 +59,13 @@ class TimerManager(
     private var initJob: Job? = null
 
     private val _timerData: MutableStateFlow<DomainTimerData> = MutableStateFlow(DomainTimerData())
+
+    /** Wall-clock epoch millis of the last timer transition, the LWW timestamp for sync. */
+    private var lastTimerEventWallClock: Long = 0
+
+    /** Whether the current runtime was mirrored from a peer (see [DomainTimerData.isMirrored]). */
+    val isMirroring: Boolean
+        get() = _timerData.value.isMirrored
 
     // defaults are only visible until the first settings emission, which also sets isReady;
     // callers gate on isReady before reading auto-start flags
@@ -190,9 +199,11 @@ class TimerManager(
                     type = timerType,
                     timeSpentPaused = 0,
                 ),
+                isMirrored = if (autoStarted) data.isMirrored else false,
             )
 
         _timerData.update { newTimerData }
+        lastTimerEventWallClock = timeProvider.now()
 
         handlePersistentDataAtStart()
         finishedSessionsHandler.resetLastInsertedSessionId()
@@ -271,8 +282,10 @@ class TimerManager(
                     endTime = newEndTime,
                     timeAtPause = newRemainingTimeAtPause,
                 ),
+                isMirrored = false,
             )
         }
+        lastTimerEventWallClock = timeProvider.now()
         log.i { "Added one minute" }
         listeners.forEach { it.onEvent(Event.AddOneMinute(newEndTime)) }
     }
@@ -307,8 +320,10 @@ class TimerManager(
                     lastPauseTime = elapsedRealtime,
                     state = TimerState.PAUSED,
                 ),
+                isMirrored = false,
             )
         }
+        lastTimerEventWallClock = timeProvider.now()
         log.i { "Paused: ${timerData.value}" }
         listeners.forEach { it.onEvent(Event.Pause(runtimeState = _timerData.value.runtime)) }
     }
@@ -333,8 +348,10 @@ class TimerManager(
                     state = TimerState.RUNNING,
                     timeAtPause = 0,
                 ),
+                isMirrored = false,
             )
         }
+        lastTimerEventWallClock = timeProvider.now()
         log.i { "Resumed: ${timerData.value}" }
 
         val timerData = _timerData.value
@@ -468,6 +485,12 @@ class TimerManager(
 
         _timerData.update { it.reset() }
 
+        // A manual next/skip turns a mirrored timer into the local leader; automatic
+        // chaining keeps mirroring the leader.
+        if (finishActionType != FinishActionType.AUTO) {
+            _timerData.update { it.copy(isMirrored = false) }
+        }
+
         val nextType =
             when {
                 !isWork || (isWork && !timerProfile.profile.isBreakEnabled) -> TimerType.FOCUS
@@ -529,11 +552,13 @@ class TimerManager(
         val withinAutoStartWindow = timeSinceExpectedEnd < AUTOSTART_TIMEOUT
 
         val autoStart =
-            withinAutoStartWindow &&
+            !data.isMirrored &&
+                withinAutoStartWindow &&
                 (
                     (settings.autoStartFocus && (type.isBreak || !timerProfile.profile.isBreakEnabled)) ||
                         (settings.autoStartBreak && type.isFocus && timerProfile.profile.isBreakEnabled)
                     )
+        lastTimerEventWallClock = timeProvider.now()
 
         log.i { "AutoStart: $autoStart (timeSinceExpectedEnd: ${timeSinceExpectedEnd.milliseconds}, withinWindow: $withinAutoStartWindow)" }
         listeners.forEach {
@@ -579,7 +604,8 @@ class TimerManager(
         }
 
         listeners.forEach { it.onEvent(Event.Reset) }
-        _timerData.update { it.reset() }
+        _timerData.update { it.reset().copy(isMirrored = false) }
+        lastTimerEventWallClock = timeProvider.now()
     }
 
     private fun handlePersistentDataAtStart() {
@@ -598,24 +624,28 @@ class TimerManager(
         val longBreakEnabled = data.getTimerProfile().isLongBreakEnabled
 
         val session = createFinishedSession()
-        session?.let {
-            if (!isFinished ||
-                (isFinished && (finishActionType != FinishActionType.MANUAL_NEXT))
-            ) {
-                finishedSessionsHandler.saveSession(it)
+        // A mirrored timer doesn't save its own finished session or advance the streak:
+        // the leading device already did both, and the session reaches this device via sync.
+        if (!data.isMirrored) {
+            session?.let {
+                if (!isFinished ||
+                    (isFinished && (finishActionType != FinishActionType.MANUAL_NEXT))
+                ) {
+                    finishedSessionsHandler.saveSession(it)
+                }
             }
-        }
 
-        if (isWork &&
-            isCountDown &&
-            longBreakEnabled &&
-            (
-                finishActionType == FinishActionType.AUTO ||
-                    finishActionType == FinishActionType.MANUAL_SKIP ||
-                    finishActionType == FinishActionType.FORCE_FINISH
-                )
-        ) {
-            incrementStreak()
+            if (isWork &&
+                isCountDown &&
+                longBreakEnabled &&
+                (
+                    finishActionType == FinishActionType.AUTO ||
+                        finishActionType == FinishActionType.MANUAL_SKIP ||
+                        finishActionType == FinishActionType.FORCE_FINISH
+                    )
+            ) {
+                incrementStreak()
+            }
         }
     }
 
@@ -686,6 +716,118 @@ class TimerManager(
     private fun onActiveLabelChanged() {
         listeners.forEach {
             it.onEvent(Event.UpdateActiveLabel)
+        }
+    }
+
+    /**
+     * Current timer expressed in wall-clock terms for the LAN sync protocol, or null when
+     * the timer isn't ready yet. The [SyncedTimerState.updatedAt] is the timestamp of the
+     * last timer transition (not the read time) so last-write-wins resolution is stable.
+     */
+    fun toSyncedTimerState(): SyncedTimerState? {
+        val data = timerData.value
+        if (!data.isReady) return null
+        val runtime = data.runtime
+        val isCountdown = data.isCurrentSessionCountdown()
+        val now = timeProvider.now()
+        val elapsedRealtime = timeProvider.elapsedRealtime()
+        val type = runtime.type
+        return SyncedTimerState(
+            state = runtime.state,
+            type = type,
+            isFocus = type.isFocus,
+            isCountdown = isCountdown,
+            labelName = data.getLabelName(),
+            remainingMillisAtPause = runtime.timeAtPause,
+            endTimeWallClock = if (runtime.endTime > 0) now - elapsedRealtime + runtime.endTime else 0,
+            startTimeWallClock =
+            if (!isCountdown && type.isFocus && runtime.lastStartTime > 0) {
+                now - elapsedRealtime + runtime.lastStartTime
+            } else {
+                0
+            },
+            timeSpentPaused = runtime.timeSpentPaused,
+            updatedAt = lastTimerEventWallClock,
+        )
+    }
+
+    /**
+     * Applies a peer's timer state (already resolved as the last-write-wins winner by the
+     * sync engine) to the local timer. The wall-clock timestamps are converted back into
+     * this device's boot-relative clock. The applied runtime is marked as mirrored so the
+     * local device won't save a duplicate finished session or echo transitions back.
+     */
+    fun applySyncedTimerState(state: SyncedTimerState) {
+        val current = timerData.value
+        if (!current.isReady) return
+
+        val elapsedRealtime = timeProvider.elapsedRealtime()
+        val now = timeProvider.now()
+        val offset = now - elapsedRealtime
+
+        val runtime =
+            when (state.state) {
+                TimerState.RESET -> TimerRuntimeState(state = TimerState.RESET)
+
+                TimerState.RUNNING ->
+                    TimerRuntimeState(
+                        startTime = if (!state.isCountdown && state.type.isFocus) state.startTimeWallClock - offset else 0,
+                        lastStartTime = elapsedRealtime,
+                        endTime = if (state.isCountdown && state.endTimeWallClock > 0) state.endTimeWallClock - offset else 0,
+                        state = TimerState.RUNNING,
+                        type = state.type,
+                        timeSpentPaused = state.timeSpentPaused,
+                    )
+
+                TimerState.PAUSED ->
+                    TimerRuntimeState(
+                        lastPauseTime = elapsedRealtime,
+                        endTime = if (state.isCountdown && state.endTimeWallClock > 0) state.endTimeWallClock - offset else 0,
+                        timeAtPause = state.remainingMillisAtPause,
+                        state = TimerState.PAUSED,
+                        type = state.type,
+                        timeSpentPaused = state.timeSpentPaused,
+                    )
+
+                TimerState.FINISHED ->
+                    TimerRuntimeState(
+                        endTime = elapsedRealtime,
+                        state = TimerState.FINISHED,
+                        type = state.type,
+                        timeSpentPaused = state.timeSpentPaused,
+                    )
+            }
+
+        _timerData.update {
+            it.copy(
+                runtime = runtime,
+                isMirrored = true,
+                completedMinutes =
+                if (state.state == TimerState.FINISHED) {
+                    FinishedSessionFactory.durationMinutes(runtime)
+                } else {
+                    it.completedMinutes
+                },
+            )
+        }
+        lastTimerEventWallClock = state.updatedAt
+        persistMirroredState(runtime, state.endTimeWallClock, now)
+        log.i { "Applied synced timer state: $state" }
+    }
+
+    private fun persistMirroredState(runtime: TimerRuntimeState, endTimeWallClock: Long, now: Long) {
+        coroutineScope.launch {
+            if (runtime.state.isReset) {
+                settingsRepo.clearPersistedTimerState()
+            } else {
+                settingsRepo.setPersistedTimerState(
+                    PersistedTimerState.from(
+                        runtime = runtime,
+                        savedAtWallClock = now,
+                        endTimeWallClock = endTimeWallClock,
+                    ),
+                )
+            }
         }
     }
 

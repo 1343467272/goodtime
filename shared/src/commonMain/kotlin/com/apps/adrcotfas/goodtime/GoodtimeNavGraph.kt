@@ -41,6 +41,7 @@ import com.apps.adrcotfas.goodtime.main.OnboardingDest
 import com.apps.adrcotfas.goodtime.main.ProDest
 import com.apps.adrcotfas.goodtime.main.SettingsDest
 import com.apps.adrcotfas.goodtime.main.StatsDest
+import com.apps.adrcotfas.goodtime.main.SyncDest
 import com.apps.adrcotfas.goodtime.main.TimerDurationsDest
 import com.apps.adrcotfas.goodtime.main.UserInterfaceDest
 import com.apps.adrcotfas.goodtime.onboarding.OnboardingScreen
@@ -49,6 +50,7 @@ import com.apps.adrcotfas.goodtime.settings.about.AboutScreen
 import com.apps.adrcotfas.goodtime.settings.about.AcknowledgementsScreen
 import com.apps.adrcotfas.goodtime.settings.about.LicensesScreen
 import com.apps.adrcotfas.goodtime.settings.notifications.NotificationsScreen
+import com.apps.adrcotfas.goodtime.settings.sync.SyncScreen
 import com.apps.adrcotfas.goodtime.settings.timerdurations.TimerProfileScreen
 import com.apps.adrcotfas.goodtime.settings.timerstyle.UserInterfaceScreen
 import com.apps.adrcotfas.goodtime.stats.StatisticsScreen
@@ -115,10 +117,18 @@ fun NavGraphBuilder.goodtimeNavGraph(
                     NotificationSettingsDest,
                 )
             },
+            onNavigateToSync = {
+                navController.navigate(SyncDest)
+            },
             onNavigateToDefaultLabel = {
                 navController.navigate(TimerDurationsDest)
             },
             onNavigateBack = navController::popBackStack2,
+        )
+    }
+    composable<SyncDest> {
+        SyncScreen(
+            onNavigateBack = { navController.popBackStack2() },
         )
     }
     composable<TimerDurationsDest> {

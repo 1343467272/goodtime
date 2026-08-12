@@ -27,10 +27,12 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import co.touchlab.kermit.Logger
+import com.apps.adrcotfas.goodtime.bl.TimeProvider
 import com.apps.adrcotfas.goodtime.data.model.Label
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 
@@ -56,11 +58,11 @@ class SettingsRepositoryImpl(
         val workFinishedSoundKey = stringPreferencesKey("workFinishedSoundKey")
         val breakFinishedSoundKey = stringPreferencesKey("breakFinishedSoundKey")
         val userSoundsKey = stringPreferencesKey("userSoundsKey")
-        val notificationSoundVolumeKey = intPreferencesKey("notificationSoundVolumeKey")
         val vibrationStrengthKey = intPreferencesKey("vibrationStrengthKey")
         val enableTorchKey = booleanPreferencesKey("enableTorchKey")
         val enableFlashScreenKey = booleanPreferencesKey("enableFlashScreenKey")
         val insistentNotificationKey = booleanPreferencesKey("insistentNotificationKey")
+        val breakEndAlarmKey = booleanPreferencesKey("breakEndAlarmKey")
         val autoStartWorkKey = booleanPreferencesKey("autoStartWorkKey")
         val autoStartBreakKey = booleanPreferencesKey("autoStartBreakKey")
         val labelNameKey = stringPreferencesKey("labelNameKey")
@@ -73,6 +75,9 @@ class SettingsRepositoryImpl(
         val backupSettingsKey = stringPreferencesKey("backupSettingsKey")
         val lastDismissedUpdateVersionCodeKey = longPreferencesKey("lastDismissedUpdateVersionCodeKey")
         val persistedTimerStateKey = stringPreferencesKey("persistedTimerStateKey")
+        val syncSettingsKey = stringPreferencesKey("syncSettingsKey")
+        val syncedSettingsKey = stringPreferencesKey("syncedSettingsKey")
+        val sessionTombstonesKey = stringPreferencesKey("sessionTombstonesKey")
     }
 
     override val settings: Flow<AppSettings> =
@@ -125,9 +130,6 @@ class SettingsRepositoryImpl(
                     it[Keys.userSoundsKey]?.let { u ->
                         json.decodeFromString<Set<SoundData>>(u)
                     } ?: emptySet(),
-                    notificationSoundVolume =
-                    it[Keys.notificationSoundVolumeKey]
-                        ?: default.notificationSoundVolume,
                     vibrationStrength =
                     it[Keys.vibrationStrengthKey]
                         ?: default.vibrationStrength,
@@ -137,6 +139,9 @@ class SettingsRepositoryImpl(
                     insistentNotification =
                     it[Keys.insistentNotificationKey]
                         ?: default.insistentNotification,
+                    breakEndAlarm =
+                    it[Keys.breakEndAlarmKey]
+                        ?: default.breakEndAlarm,
                     autoStartFocus = it[Keys.autoStartWorkKey] ?: default.autoStartFocus,
                     autoStartBreak = it[Keys.autoStartBreakKey] ?: default.autoStartBreak,
                     labelName = it[Keys.labelNameKey] ?: default.labelName,
@@ -168,6 +173,10 @@ class SettingsRepositoryImpl(
                     it[Keys.persistedTimerStateKey]?.let { p ->
                         json.decodeFromString<PersistedTimerState>(p)
                     },
+                    syncSettings =
+                    it[Keys.syncSettingsKey]?.let { s ->
+                        json.decodeFromString<SyncSettings>(s)
+                    } ?: default.syncSettings,
                 )
             }.catch {
                 log.e("Error parsing settings", it)
@@ -248,10 +257,6 @@ class SettingsRepositoryImpl(
         dataStore.remove(Keys.userSoundsKey, sound)
     }
 
-    override suspend fun setNotificationSoundVolume(volume: Int) {
-        dataStore.edit { it[Keys.notificationSoundVolumeKey] = volume }
-    }
-
     override suspend fun setVibrationStrength(strength: Int) {
         dataStore.edit { it[Keys.vibrationStrengthKey] = strength }
     }
@@ -266,6 +271,10 @@ class SettingsRepositoryImpl(
 
     override suspend fun setInsistentNotification(enabled: Boolean) {
         dataStore.edit { it[Keys.insistentNotificationKey] = enabled }
+    }
+
+    override suspend fun setBreakEndAlarm(enabled: Boolean) {
+        dataStore.edit { it[Keys.breakEndAlarmKey] = enabled }
     }
 
     override suspend fun setAutoStartWork(enabled: Boolean) {
@@ -344,5 +353,83 @@ class SettingsRepositoryImpl(
 
     override suspend fun clearPersistedTimerState() {
         dataStore.edit { it.remove(Keys.persistedTimerStateKey) }
+    }
+
+    override suspend fun setSyncSettings(syncSettings: SyncSettings) {
+        dataStore.edit { it[Keys.syncSettingsKey] = json.encodeToString(syncSettings) }
+    }
+
+    override val syncedSettings: Flow<SyncedSettings?> =
+        dataStore.data
+            .catch { exception ->
+                if (exception is IOException) {
+                    log.e("Error reading settings", exception)
+                    emit(emptyPreferences())
+                } else {
+                    throw exception
+                }
+            }.map { preferences ->
+                preferences[Keys.syncedSettingsKey]?.let { s ->
+                    runCatching { json.decodeFromString<SyncedSettings>(s) }.getOrNull()
+                }
+            }.distinctUntilChanged()
+
+    override suspend fun saveSyncedSettings(syncedSettings: SyncedSettings) {
+        dataStore.edit { it[Keys.syncedSettingsKey] = json.encodeToString(syncedSettings) }
+    }
+
+    override suspend fun applySyncedSettings(syncedSettings: SyncedSettings) {
+        setWorkDayStart(syncedSettings.workdayStart)
+        setFirstDayOfWeek(syncedSettings.firstDayOfWeek)
+        setWorkFinishedSound(syncedSettings.workFinishedSound)
+        setBreakFinishedSound(syncedSettings.breakFinishedSound)
+        syncedSettings.userSounds.forEach { addUserSound(it) }
+        setVibrationStrength(syncedSettings.vibrationStrength)
+        setEnableTorch(syncedSettings.enableTorch)
+        setEnableFlashScreen(syncedSettings.flashScreen)
+        setInsistentNotification(syncedSettings.insistentNotification)
+        setBreakEndAlarm(syncedSettings.breakEndAlarm)
+        setAutoStartWork(syncedSettings.autoStartFocus)
+        setAutoStartBreak(syncedSettings.autoStartBreak)
+        setLongBreakData(syncedSettings.longBreakData)
+        setBreakBudgetData(syncedSettings.breakBudgetData)
+        updateReminderSettings { syncedSettings.productivityReminderSettings }
+        updateUiSettings { syncedSettings.uiSettings }
+        updateTimerStyle { syncedSettings.timerStyle }
+        if (syncedSettings.labelName.isNotEmpty()) {
+            activateLabelWithName(syncedSettings.labelName)
+        }
+        // userSounds is a set store: reconcile it to exactly the synced set (remove what's gone).
+        val currentSounds = settings.first().userSounds
+        (currentSounds - syncedSettings.userSounds).forEach { removeUserSound(it) }
+        syncedSettings.userSounds.forEach { addUserSound(it) }
+    }
+
+    override val sessionTombstones: Flow<Map<String, Long>> =
+        dataStore.data
+            .catch { exception ->
+                if (exception is IOException) {
+                    log.e("Error reading settings", exception)
+                    emit(emptyPreferences())
+                } else {
+                    throw exception
+                }
+            }.map { preferences ->
+                preferences[Keys.sessionTombstonesKey]?.let { s ->
+                    runCatching { json.decodeFromString<Map<String, Long>>(s) }.getOrNull()
+                } ?: emptyMap()
+            }.distinctUntilChanged()
+
+    override suspend fun saveSessionTombstones(tombstones: Map<String, Long>) {
+        // Prune tombstones older than 30 days: the deletion was almost certainly propagated.
+        val cutoff = TimeProvider.now() - 30L * 24 * 60 * 60 * 1000
+        val pruned = tombstones.filterValues { it > cutoff }
+        dataStore.edit {
+            if (pruned.isEmpty()) {
+                it.remove(Keys.sessionTombstonesKey)
+            } else {
+                it[Keys.sessionTombstonesKey] = json.encodeToString(pruned)
+            }
+        }
     }
 }

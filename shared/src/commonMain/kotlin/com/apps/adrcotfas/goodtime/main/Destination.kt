@@ -55,6 +55,9 @@ data object TimerDurationsDest
 data object NotificationSettingsDest
 
 @Serializable
+data object SyncDest
+
+@Serializable
 data object BackupDest
 
 @Serializable

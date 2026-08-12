@@ -41,11 +41,13 @@ import com.apps.adrcotfas.goodtime.di.getWith
 import com.apps.adrcotfas.goodtime.di.localDataModule
 import com.apps.adrcotfas.goodtime.di.mainModule
 import com.apps.adrcotfas.goodtime.di.platformModule
+import com.apps.adrcotfas.goodtime.di.syncModule
 import com.apps.adrcotfas.goodtime.di.timerManagerModule
 import com.apps.adrcotfas.goodtime.di.viewModelModule
 import com.apps.adrcotfas.goodtime.platform.Distribution
 import com.apps.adrcotfas.goodtime.settings.notifications.SoundsViewModel
 import com.apps.adrcotfas.goodtime.settings.reminders.ReminderManager
+import com.apps.adrcotfas.goodtime.sync.SyncManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
@@ -125,6 +127,7 @@ class GoodtimeApplication :
                 coreBackupModule,
                 distributionModule,
                 timerManagerModule,
+                syncModule,
                 viewModelModule,
                 mainModule,
             )
@@ -136,6 +139,11 @@ class GoodtimeApplication :
         val reminderManager = get<ReminderManager>()
         applicationScope.launch {
             reminderManager.init()
+        }
+
+        val syncManager = get<SyncManager>()
+        applicationScope.launch {
+            syncManager.ensureStarted()
         }
     }
 

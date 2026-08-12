@@ -32,7 +32,6 @@ import java.io.ByteArrayInputStream
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.Clip
 import javax.sound.sampled.DataLine
-import javax.sound.sampled.FloatControl
 import kotlin.concurrent.Volatile
 import goodtime_productivity.shared.generated.resources.Res
 
@@ -53,6 +52,9 @@ class DesktopSoundPlayer(
     @Volatile
     private var state = SoundPlayerState()
 
+    @Volatile
+    private var alarmBreak = false
+
     init {
         ioScope.launch {
             settingsRepo.settings.collect { settings ->
@@ -61,8 +63,8 @@ class DesktopSoundPlayer(
                         workRingTone = toSoundData(settings.workFinishedSound),
                         breakRingTone = toSoundData(settings.breakFinishedSound),
                         loop = settings.insistentNotification,
-                        volume = settings.notificationSoundVolume,
                     )
+                alarmBreak = settings.breakEndAlarm
             }
         }
     }
@@ -80,23 +82,26 @@ class DesktopSoundPlayer(
                 TimerType.FOCUS -> state.workRingTone
                 TimerType.BREAK, TimerType.LONG_BREAK -> state.breakRingTone
             }
-        play(soundData, state.loop)
+        val loop =
+            when (timerType) {
+                TimerType.FOCUS -> state.loop
+                TimerType.BREAK, TimerType.LONG_BREAK -> state.loop || alarmBreak
+            }
+        play(soundData, loop)
     }
 
     override fun play(
         soundData: SoundData,
         loop: Boolean,
-        volume: Int?,
     ) {
         logger.i { "play() called with soundData=${soundData.name}, uri=${soundData.uriString}, loop=$loop" }
-        val volumePercent = volume ?: state.volume
         playerScope.launch {
             job?.cancelAndJoin()
             job =
                 playerScope.launch {
                     playbackMutex.withLock {
                         stopInternal()
-                        playInternal(soundData, loop, volumePercent / 100f)
+                        playInternal(soundData, loop)
                     }
                 }
         }
@@ -123,7 +128,6 @@ class DesktopSoundPlayer(
     private suspend fun playInternal(
         soundData: SoundData,
         loop: Boolean,
-        volume: Float,
     ) {
         if (soundData.isSilent) {
             logger.i { "Sound is silent, skipping playback" }
@@ -146,7 +150,6 @@ class DesktopSoundPlayer(
             val newClip = AudioSystem.getLine(info) as Clip
             newClip.open(stream)
             newClip.loop(if (loop) Clip.LOOP_CONTINUOUSLY else 0)
-            setVolume(newClip, volume)
             newClip.start()
             clip = newClip
             logger.i { "Playing sound: $fileName" }
@@ -160,20 +163,6 @@ class DesktopSoundPlayer(
             .getOrNull()
             ?: runCatching { Res.readBytes("files/$fileName") }
                 .getOrNull()
-
-    private fun setVolume(
-        clip: Clip,
-        volume: Float,
-    ) {
-        if (!clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) return
-        val gainControl = clip.getControl(FloatControl.Type.MASTER_GAIN) as FloatControl
-        val gain = if (volume <= 0f) {
-            gainControl.minimum
-        } else {
-            gainControl.minimum + (gainControl.maximum - gainControl.minimum) * volume.coerceIn(0f, 1f)
-        }
-        gainControl.value = gain
-    }
 
     private companion object {
         const val DEFAULT_SOUND = "positive_chime.wav"

@@ -19,7 +19,9 @@ package com.apps.adrcotfas.goodtime.data.model
 
 import com.apps.adrcotfas.goodtime.bl.TimerType
 import kotlin.time.Duration.Companion.minutes
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class TimerProfile(
     val name: String? = null,
     val isCountdown: Boolean = true,
@@ -35,6 +37,8 @@ data class TimerProfile(
     val sessionsBeforeLongBreak: Int = DEFAULT_SESSIONS_BEFORE_LONG_BREAK,
     /** the ratio between work and break duration; invalid for isCountdown true */
     val workBreakRatio: Int = DEFAULT_WORK_BREAK_RATIO,
+    /** Wall-clock epoch millis of the last local modification, used for sync conflict resolution. */
+    val updatedAt: Long = 0,
 ) {
     companion object {
         const val DEFAULT_PROFILE_NAME = "25/5"

@@ -49,8 +49,6 @@ interface SettingsRepository {
 
     suspend fun removeUserSound(sound: SoundData)
 
-    suspend fun setNotificationSoundVolume(volume: Int)
-
     suspend fun setVibrationStrength(strength: Int)
 
     suspend fun setEnableTorch(enabled: Boolean)
@@ -58,6 +56,8 @@ interface SettingsRepository {
     suspend fun setEnableFlashScreen(enabled: Boolean)
 
     suspend fun setInsistentNotification(enabled: Boolean)
+
+    suspend fun setBreakEndAlarm(enabled: Boolean)
 
     suspend fun setAutoStartWork(enabled: Boolean)
 
@@ -94,6 +94,30 @@ interface SettingsRepository {
     suspend fun setPersistedTimerState(state: PersistedTimerState?)
 
     suspend fun clearPersistedTimerState()
+
+    suspend fun setSyncSettings(syncSettings: SyncSettings)
+
+    /**
+     * The last [SyncedSettings] snapshot this device published or accepted from a peer.
+     * Null before the first sync.
+     */
+    val syncedSettings: Flow<SyncedSettings?>
+
+    suspend fun saveSyncedSettings(syncedSettings: SyncedSettings)
+
+    /**
+     * Writes every field of [syncedSettings] into the individual settings keys.
+     * Does not bump the synced settings timestamp.
+     */
+    suspend fun applySyncedSettings(syncedSettings: SyncedSettings)
+
+    /**
+     * Tombstones (syncId -> deletion epoch millis) for sessions deleted locally, so that
+     * deletions propagate to peers instead of being resurrected.
+     */
+    val sessionTombstones: Flow<Map<String, Long>>
+
+    suspend fun saveSessionTombstones(tombstones: Map<String, Long>)
 }
 
 /**

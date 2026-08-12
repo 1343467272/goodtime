@@ -1,0 +1,52 @@
+name: Build Windows Desktop
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The Gradle daemon must run on JDK 21 (kmp-app-version plugin requirement).
+      # The JDK 17 toolchain from jvmToolchain(17) is auto-provisioned via the
+      # foojay resolver configured in settings.gradle.kts.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      # gradle.properties pins org.gradle.java.home to a machine-specific path;
+      # repoint it at the runner's JDK so the daemon can start on CI.
+      - name: Point Gradle daemon at the runner JDK
+        shell: pwsh
+        run: |
+          $javaHome = $env:JAVA_HOME.Replace('\', '\\')
+          $content = Get-Content -Path gradle.properties -Raw
+          $content = [regex]::Replace($content, '(?m)^org\.gradle\.java\.home=.*$', "org.gradle.java.home=$javaHome")
+          [System.IO.File]::WriteAllText((Join-Path (Get-Location) 'gradle.properties'), $content, [System.Text.UTF8Encoding]::new($false))
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build MSI and EXE
+        shell: cmd
+        run: .\gradlew.bat :desktopApp:packageDistributionForCurrentOS
+
+      - name: Upload MSI installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: goodtime-windows-msi
+          path: desktopApp/build/compose/binaries/main/msi/Goodtime-*.msi
+          if-no-files-found: error
+
+      - name: Upload EXE launcher
+        uses: actions/upload-artifact@v4
+        with:
+          name: goodtime-windows-exe
+          path: desktopApp/build/compose/binaries/main/exe/Goodtime-*.exe
+          if-no-files-found: error

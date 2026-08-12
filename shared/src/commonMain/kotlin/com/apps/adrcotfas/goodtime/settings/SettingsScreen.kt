@@ -57,6 +57,7 @@ import compose.icons.EvaIcons
 import compose.icons.evaicons.Outline
 import compose.icons.evaicons.outline.Bell
 import compose.icons.evaicons.outline.ColorPalette
+import compose.icons.evaicons.outline.Sync
 import goodtime_productivity.shared.generated.resources.Res
 import goodtime_productivity.shared.generated.resources.ic_status_goodtime
 import goodtime_productivity.shared.generated.resources.settings_auto_start_break_desc
@@ -74,6 +75,8 @@ import goodtime_productivity.shared.generated.resources.settings_notifications_t
 import goodtime_productivity.shared.generated.resources.settings_productivity_reminder_title
 import goodtime_productivity.shared.generated.resources.settings_screensaver_mode
 import goodtime_productivity.shared.generated.resources.settings_start_of_the_week
+import goodtime_productivity.shared.generated.resources.settings_sync
+import goodtime_productivity.shared.generated.resources.settings_sync_desc
 import goodtime_productivity.shared.generated.resources.settings_timer_and_sessions
 import goodtime_productivity.shared.generated.resources.settings_timer_durations_desc
 import goodtime_productivity.shared.generated.resources.settings_timer_durations_title
@@ -96,6 +99,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToUserInterface: () -> Unit,
     onNavigateToNotifications: () -> Unit,
+    onNavigateToSync: () -> Unit,
     onNavigateToDefaultLabel: () -> Unit,
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
@@ -302,6 +306,21 @@ fun SettingsScreen(
             DndCheckbox(
                 checked = uiState.settings.uiSettings.dndDuringWork,
                 onCheckedChange = viewModel::setDndDuringWork,
+            )
+
+            SubtleHorizontalDivider()
+            CompactPreferenceGroupTitle(text = stringResource(Res.string.settings_sync))
+            IconListItem(
+                title = stringResource(Res.string.settings_sync),
+                subtitle = stringResource(Res.string.settings_sync_desc),
+                icon = {
+                    Icon(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        imageVector = EvaIcons.Outline.Sync,
+                        contentDescription = stringResource(Res.string.settings_sync),
+                    )
+                },
+                onClick = onNavigateToSync,
             )
         }
         if (uiState.showWorkdayStartPicker) {

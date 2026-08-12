@@ -20,6 +20,8 @@
 			<string>Any</string>
 		</dict>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Goodtime syncs your sessions, settings and timer state with your other devices over the local network.</string>
 	<key>RevenueCatApiKeyDebug</key>
 	<string>test_mIjxZUKugfUbtAZNjpvxaWynKcD</string>
 	<key>RevenueCatApiKeyRelease</key>

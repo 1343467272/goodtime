@@ -18,7 +18,9 @@
 package com.apps.adrcotfas.goodtime.data.model
 
 import com.apps.adrcotfas.goodtime.data.model.Label.Companion.DEFAULT_LABEL_NAME
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class Session(
     val id: Long,
     val timestamp: Long, // milliseconds since epoch
@@ -28,6 +30,10 @@ data class Session(
     val notes: String,
     val isWork: Boolean,
     val isArchived: Boolean,
+    /** Stable, device-independent identity used by the LAN sync engine. */
+    val syncId: String = "",
+    /** Wall-clock epoch millis of the last local modification, used for sync conflict resolution. */
+    val updatedAt: Long = 0,
 ) {
     companion object {
         fun create(

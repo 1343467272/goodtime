@@ -33,6 +33,8 @@ import java.awt.RenderingHints
 import java.awt.SystemTray
 import java.awt.TrayIcon
 import java.awt.image.BufferedImage
+import java.util.Timer
+import java.util.TimerTask
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 
@@ -41,13 +43,29 @@ import org.jetbrains.compose.resources.getString
  *
  * Windows 10/11 surface tray-icon balloons as toast notifications in the Action
  * Center, which is how a plain-JDK desktop app can notify the user without extra
- * native dependencies. The tray icon is created lazily on the first notification.
+ * native dependencies.
+ *
+ * Windows silently drops a balloon that is shown in the same moment the tray icon
+ * is added, so the icon is registered right after startup and any message sent
+ * while the icon is still settling is deferred briefly.
  */
 class DesktopNotifications(
     private val logger: Logger,
 ) : EventListener {
 
     private var trayIcon: TrayIcon? = null
+    private var iconReadyAt = 0L
+
+    init {
+        Timer(true).schedule(
+            object : TimerTask() {
+                override fun run() {
+                    trayIcon()
+                }
+            },
+            ICON_REGISTRATION_DELAY_MS,
+        )
+    }
 
     override fun onEvent(event: Event) {
         if (event is Event.Finished) {
@@ -84,6 +102,22 @@ class DesktopNotifications(
 
     fun show(title: String, message: String) {
         val icon = trayIcon() ?: return
+        val waitMs = iconReadyAt - System.currentTimeMillis()
+        if (waitMs > 0) {
+            Timer(true).schedule(
+                object : TimerTask() {
+                    override fun run() {
+                        display(icon, title, message)
+                    }
+                },
+                waitMs,
+            )
+        } else {
+            display(icon, title, message)
+        }
+    }
+
+    private fun display(icon: TrayIcon, title: String, message: String) {
         try {
             icon.displayMessage(title, message, TrayIcon.MessageType.INFO)
         } catch (e: Exception) {
@@ -91,9 +125,13 @@ class DesktopNotifications(
         }
     }
 
+    @Synchronized
     private fun trayIcon(): TrayIcon? {
         if (trayIcon == null) {
             trayIcon = createTrayIcon()
+            if (trayIcon != null) {
+                iconReadyAt = System.currentTimeMillis() + ICON_REGISTRATION_GRACE_MS
+            }
         }
         return trayIcon
     }
@@ -137,4 +175,9 @@ class DesktopNotifications(
             logger.w("Failed to resolve notification text, using fallback: ${e.message}")
             fallback
         }
+
+    private companion object {
+        const val ICON_REGISTRATION_DELAY_MS = 1_000L
+        const val ICON_REGISTRATION_GRACE_MS = 2_000L
+    }
 }

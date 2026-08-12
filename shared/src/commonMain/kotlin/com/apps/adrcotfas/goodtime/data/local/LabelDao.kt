@@ -44,7 +44,8 @@ interface LabelDao {
             isLongBreakEnabled = :newIsLongBreakEnabled,
             longBreakDuration = :newLongBreakDuration,
             sessionsBeforeLongBreak = :newSessionsBeforeLongBreak,
-            workBreakRatio = :newWorkBreakRatio
+            workBreakRatio = :newWorkBreakRatio,
+            updatedAt = :newUpdatedAt
         WHERE name = :name
     """,
     )
@@ -61,18 +62,59 @@ interface LabelDao {
         newLongBreakDuration: Int,
         newSessionsBeforeLongBreak: Int,
         newWorkBreakRatio: Int,
+        newUpdatedAt: Long,
         name: String,
     )
 
-    @Query("UPDATE localLabel SET orderIndex = :newOrderIndex WHERE name = :name")
+    @Query(
+        """
+        UPDATE localLabel SET
+            colorIndex = :newColorIndex,
+            orderIndex = :newOrderIndex,
+            useDefaultTimeProfile = :newUseDefaultTimeProfile,
+            timerProfileName = :newTimerProfileName,
+            isCountdown = :newIsCountdown,
+            workDuration = :newWorkDuration,
+            isBreakEnabled = :newIsBreakEnabled,
+            breakDuration = :newBreakDuration,
+            isLongBreakEnabled = :newIsLongBreakEnabled,
+            longBreakDuration = :newLongBreakDuration,
+            sessionsBeforeLongBreak = :newSessionsBeforeLongBreak,
+            workBreakRatio = :newWorkBreakRatio,
+            isArchived = :newIsArchived,
+            updatedAt = :newUpdatedAt
+        WHERE name = :name
+    """,
+    )
+    suspend fun updateLabelSync(
+        newColorIndex: Int,
+        newOrderIndex: Long,
+        newUseDefaultTimeProfile: Boolean,
+        newTimerProfileName: String?,
+        newIsCountdown: Boolean,
+        newWorkDuration: Int,
+        newIsBreakEnabled: Boolean,
+        newBreakDuration: Int,
+        newIsLongBreakEnabled: Boolean,
+        newLongBreakDuration: Int,
+        newSessionsBeforeLongBreak: Int,
+        newWorkBreakRatio: Int,
+        newIsArchived: Boolean,
+        newUpdatedAt: Long,
+        name: String,
+    ): Int
+
+    @Query("UPDATE localLabel SET orderIndex = :newOrderIndex, updatedAt = :newUpdatedAt WHERE name = :name")
     suspend fun updateOrderIndex(
         newOrderIndex: Int,
+        newUpdatedAt: Long,
         name: String,
     )
 
-    @Query("UPDATE localLabel SET isArchived = :isArchived WHERE name = :name")
+    @Query("UPDATE localLabel SET isArchived = :isArchived, updatedAt = :newUpdatedAt WHERE name = :name")
     suspend fun updateIsArchived(
         isArchived: Boolean,
+        newUpdatedAt: Long,
         name: String,
     )
 
@@ -80,22 +122,29 @@ interface LabelDao {
     suspend fun insertLabelAndBulkRearrange(
         label: LocalLabel,
         labelsToUpdate: List<Pair<String, Long>>,
+        updatedAt: Long,
     ) {
         insert(label)
         labelsToUpdate.forEach { (name, newOrderIndex) ->
-            updateOrderIndex(newOrderIndex.toInt(), name)
+            updateOrderIndex(newOrderIndex.toInt(), updatedAt, name)
         }
     }
 
     @Transaction
-    suspend fun bulkUpdateLabelOrderIndex(labelsToUpdate: List<Pair<String, Long>>) {
+    suspend fun bulkUpdateLabelOrderIndex(
+        labelsToUpdate: List<Pair<String, Long>>,
+        updatedAt: Long,
+    ) {
         labelsToUpdate.forEach { (name, newOrderIndex) ->
-            updateOrderIndex(newOrderIndex.toInt(), name)
+            updateOrderIndex(newOrderIndex.toInt(), updatedAt, name)
         }
     }
 
     @Query("SELECT * FROM localLabel ORDER BY orderIndex")
     fun selectAll(): Flow<List<LocalLabel>>
+
+    @Query("SELECT * FROM localLabel ORDER BY orderIndex")
+    suspend fun selectAllOnce(): List<LocalLabel>
 
     @Query("SELECT * FROM localLabel WHERE isArchived = :isArchived ORDER BY orderIndex")
     fun selectByArchived(isArchived: Boolean): Flow<List<LocalLabel>>

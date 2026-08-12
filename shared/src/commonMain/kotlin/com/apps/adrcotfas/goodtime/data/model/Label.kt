@@ -19,7 +19,9 @@ package com.apps.adrcotfas.goodtime.data.model
 
 import com.apps.adrcotfas.goodtime.bl.LabelData
 import kotlin.random.Random
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class Label(
     val name: String,
     val colorIndex: Int = DEFAULT_LABEL_COLOR_INDEX,
@@ -27,6 +29,8 @@ data class Label(
     val useDefaultTimeProfile: Boolean = true,
     val timerProfile: TimerProfile = TimerProfile(),
     val isArchived: Boolean = false,
+    /** Wall-clock epoch millis of the last local modification, used for sync conflict resolution. */
+    val updatedAt: Long = 0,
 ) {
     companion object {
         // the internal name of the default, built-in label which cannot be deleted

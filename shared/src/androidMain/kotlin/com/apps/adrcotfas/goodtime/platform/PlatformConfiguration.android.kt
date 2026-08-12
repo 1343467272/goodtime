@@ -24,6 +24,7 @@ import android.os.Build
  */
 private class AndroidPlatformConfiguration : PlatformConfiguration {
     override val isAndroid: Boolean = true
+    override val isDesktop: Boolean = false
 
     /**
      * In-app updates are supported on Android (Google Play flavor).

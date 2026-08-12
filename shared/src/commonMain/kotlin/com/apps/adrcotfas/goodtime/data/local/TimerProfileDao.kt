@@ -42,12 +42,46 @@ interface TimerProfileDao {
     @Query("DELETE FROM localTimerProfile WHERE name = :name")
     suspend fun deleteByName(name: String)
 
+    @Query(
+        """
+        UPDATE localTimerProfile SET
+            isCountdown = :newIsCountdown,
+            workDuration = :newWorkDuration,
+            isBreakEnabled = :newIsBreakEnabled,
+            breakDuration = :newBreakDuration,
+            isLongBreakEnabled = :newIsLongBreakEnabled,
+            longBreakDuration = :newLongBreakDuration,
+            sessionsBeforeLongBreak = :newSessionsBeforeLongBreak,
+            workBreakRatio = :newWorkBreakRatio,
+            updatedAt = :newUpdatedAt
+        WHERE name = :name
+    """,
+    )
+    suspend fun updateProfileSync(
+        newIsCountdown: Boolean,
+        newWorkDuration: Int,
+        newIsBreakEnabled: Boolean,
+        newBreakDuration: Int,
+        newIsLongBreakEnabled: Boolean,
+        newLongBreakDuration: Int,
+        newSessionsBeforeLongBreak: Int,
+        newWorkBreakRatio: Int,
+        newUpdatedAt: Long,
+        name: String,
+    ): Int
+
     @Query("SELECT * FROM localTimerProfile WHERE name = :name")
     fun selectByName(name: String): Flow<LocalTimerProfile?>
+
+    @Query("SELECT * FROM localTimerProfile WHERE name = :name")
+    suspend fun selectByNameOnce(name: String): LocalTimerProfile?
 
     @Query("SELECT * FROM localTimerProfile WHERE name IN (:names)")
     fun selectByNames(names: List<String>): Flow<List<LocalTimerProfile>>
 
     @Query("SELECT * FROM localTimerProfile")
     fun selectAll(): Flow<List<LocalTimerProfile>>
+
+    @Query("SELECT * FROM localTimerProfile")
+    suspend fun selectAllOnce(): List<LocalTimerProfile>
 }

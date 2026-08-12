@@ -25,7 +25,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -40,6 +39,7 @@ import com.apps.adrcotfas.goodtime.bl.notifications.SoundPlayer
 import com.apps.adrcotfas.goodtime.bl.notifications.TorchManager
 import com.apps.adrcotfas.goodtime.bl.notifications.VibrationPlayer
 import com.apps.adrcotfas.goodtime.data.settings.SoundData
+import com.apps.adrcotfas.goodtime.platform.getPlatformConfiguration
 import com.apps.adrcotfas.goodtime.settings.SettingsViewModel
 import com.apps.adrcotfas.goodtime.ui.BetterListItem
 import com.apps.adrcotfas.goodtime.ui.LockedCheckboxListItem
@@ -47,6 +47,8 @@ import com.apps.adrcotfas.goodtime.ui.SliderListItem
 import com.apps.adrcotfas.goodtime.ui.TopBar
 import goodtime_productivity.shared.generated.resources.Res
 import goodtime_productivity.shared.generated.resources.settings_break_complete_sound
+import goodtime_productivity.shared.generated.resources.settings_break_end_alarm_desc
+import goodtime_productivity.shared.generated.resources.settings_break_end_alarm_title
 import goodtime_productivity.shared.generated.resources.settings_default
 import goodtime_productivity.shared.generated.resources.settings_focus_complete_sound
 import goodtime_productivity.shared.generated.resources.settings_insistent_notification_desc
@@ -54,7 +56,6 @@ import goodtime_productivity.shared.generated.resources.settings_insistent_notif
 import goodtime_productivity.shared.generated.resources.settings_notifications_title
 import goodtime_productivity.shared.generated.resources.settings_screen_flash_title
 import goodtime_productivity.shared.generated.resources.settings_silent
-import goodtime_productivity.shared.generated.resources.settings_sound_volume
 import goodtime_productivity.shared.generated.resources.settings_torch_desc
 import goodtime_productivity.shared.generated.resources.settings_torch_title
 import goodtime_productivity.shared.generated.resources.settings_vibration_strength
@@ -108,27 +109,6 @@ fun NotificationsScreen(onNavigateBack: () -> Boolean) {
                 onClick = { viewModel.setShowSelectBreakSoundPicker(true) },
             )
 
-            var selectedVolume by remember(settings.notificationSoundVolume) {
-                mutableIntStateOf(settings.notificationSoundVolume)
-            }
-            SliderListItem(
-                title = stringResource(Res.string.settings_sound_volume),
-                value = selectedVolume,
-                trackIcon = Icons.Outlined.Notifications,
-                min = 0,
-                max = 100,
-                steps = 9,
-                animateToNearestStep = true,
-                onValueChange = { selectedVolume = it },
-                onValueChangeFinished = {
-                    viewModel.setNotificationSoundVolume(selectedVolume)
-                    soundPlayer.play(
-                        if (workRingTone.isSilent) breakRingTone else workRingTone,
-                        volume = selectedVolume,
-                    )
-                },
-            )
-
             var selectedStrength by remember(settings.vibrationStrength) {
                 mutableIntStateOf(settings.vibrationStrength)
             }
@@ -174,6 +154,17 @@ fun NotificationsScreen(onNavigateBack: () -> Boolean) {
                 checked = settings.insistentNotification,
             ) {
                 viewModel.setInsistentNotification(it)
+            }
+
+            if (getPlatformConfiguration().isDesktop) {
+                LockedCheckboxListItem(
+                    title = stringResource(Res.string.settings_break_end_alarm_title),
+                    enabled = settings.isPro,
+                    subtitle = stringResource(Res.string.settings_break_end_alarm_desc),
+                    checked = settings.breakEndAlarm,
+                ) {
+                    viewModel.setBreakEndAlarm(it)
+                }
             }
         }
 

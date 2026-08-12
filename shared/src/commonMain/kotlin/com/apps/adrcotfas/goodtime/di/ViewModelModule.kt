@@ -26,6 +26,7 @@ import com.apps.adrcotfas.goodtime.settings.SettingsViewModel
 import com.apps.adrcotfas.goodtime.settings.TimerProfileViewModel
 import com.apps.adrcotfas.goodtime.settings.about.AboutViewModel
 import com.apps.adrcotfas.goodtime.settings.about.AcknowledgementsViewModel
+import com.apps.adrcotfas.goodtime.settings.sync.SyncViewModel
 import com.apps.adrcotfas.goodtime.stats.StatisticsHistoryViewModel
 import com.apps.adrcotfas.goodtime.stats.StatisticsViewModel
 import org.koin.core.module.Module
@@ -40,6 +41,7 @@ val viewModelModule: Module =
         viewModelOf(::LabelsViewModel)
         viewModelOf(::AddEditLabelViewModel)
         viewModelOf(::SettingsViewModel)
+        viewModelOf(::SyncViewModel)
         viewModelOf(::TimerProfileViewModel)
         viewModelOf(::AboutViewModel)
         viewModelOf(::AcknowledgementsViewModel)

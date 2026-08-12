@@ -43,6 +43,7 @@ class KoinModuleVerifyTest {
                 coreBackupModule,
                 androidCommonBackupModule,
                 timerManagerModule,
+                syncModule,
                 viewModelModule,
                 mainModule,
             )

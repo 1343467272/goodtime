@@ -58,13 +58,54 @@ class FakeTimerProfileDao : TimerProfileDao {
         timerProfiles.value = currentList
     }
 
+    override suspend fun updateProfileSync(
+        newIsCountdown: Boolean,
+        newWorkDuration: Int,
+        newIsBreakEnabled: Boolean,
+        newBreakDuration: Int,
+        newIsLongBreakEnabled: Boolean,
+        newLongBreakDuration: Int,
+        newSessionsBeforeLongBreak: Int,
+        newWorkBreakRatio: Int,
+        newUpdatedAt: Long,
+        name: String,
+    ): Int {
+        var updated = 0
+        val currentList =
+            timerProfiles.value.map {
+                if (it.name == name) {
+                    updated++
+                    it.copy(
+                        isCountdown = newIsCountdown,
+                        workDuration = newWorkDuration,
+                        isBreakEnabled = newIsBreakEnabled,
+                        breakDuration = newBreakDuration,
+                        isLongBreakEnabled = newIsLongBreakEnabled,
+                        longBreakDuration = newLongBreakDuration,
+                        sessionsBeforeLongBreak = newSessionsBeforeLongBreak,
+                        workBreakRatio = newWorkBreakRatio,
+                        updatedAt = newUpdatedAt,
+                    )
+                } else {
+                    it
+                }
+            }
+        timerProfiles.value = currentList
+        return updated
+    }
+
     override fun selectByName(name: String): Flow<LocalTimerProfile?> = timerProfiles.map { profiles ->
         profiles.firstOrNull { it.name == name }
     }
+
+    override suspend fun selectByNameOnce(name: String): LocalTimerProfile? =
+        timerProfiles.value.firstOrNull { it.name == name }
 
     override fun selectByNames(names: List<String>): Flow<List<LocalTimerProfile>> = timerProfiles.map { profiles ->
         profiles.filter { it.name in names }
     }
 
     override fun selectAll(): Flow<List<LocalTimerProfile>> = timerProfiles
+
+    override suspend fun selectAllOnce(): List<LocalTimerProfile> = timerProfiles.value
 }

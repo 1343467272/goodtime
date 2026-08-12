@@ -40,12 +40,12 @@ data class AppSettings(
     /** The name/URI of the sound file or empty for default*/
     val breakFinishedSound: String = "",
     val userSounds: Set<SoundData> = emptySet(),
-    /** Notification sound volume in percent, 0..100 */
-    val notificationSoundVolume: Int = 50,
     val vibrationStrength: Int = 3,
     val enableTorch: Boolean = false,
     val flashScreen: Boolean = false,
     val insistentNotification: Boolean = false,
+    /** Desktop: play an insistent looping sound when a break ends until dismissed */
+    val breakEndAlarm: Boolean = false,
     /** only valid with insistentNotification off **/
     val autoStartFocus: Boolean = false,
     /** only valid with insistentNotification off and for countdown timers **/
@@ -63,6 +63,7 @@ data class AppSettings(
     /** The version code of the last dismissed update, or 0 if no update has been dismissed */
     val lastDismissedUpdateVersionCode: Long = 0,
     val persistedTimerState: PersistedTimerState? = null,
+    val syncSettings: SyncSettings = SyncSettings(),
 )
 
 enum class NotificationPermissionState {
@@ -141,3 +142,76 @@ data class BackupSettings(
     /** Timestamp in milliseconds for Android local folder backups */
     val localLastBackupTimestamp: Long = 0L,
 )
+
+/**
+ * Configuration of the LAN (local network) sync feature. Not itself synced across devices.
+ */
+@Serializable
+data class SyncSettings(
+    val enabled: Boolean = false,
+    /** TCP port the local sync server listens on. All synced devices must share the same port. */
+    val port: Int = DEFAULT_PORT,
+    /** Human-readable name shown to peers for this device. */
+    val serverName: String = DEFAULT_SERVER_NAME,
+    /** Stable unique id of this device, generated on first enable. */
+    val deviceId: String = "",
+    /** Epoch millis of the last successful sync, used for diagnostics/UI. */
+    val lastSyncTimestamp: Long = 0L,
+) {
+    companion object {
+        const val DEFAULT_PORT = 46371
+        const val DEFAULT_SERVER_NAME = "Goodtime"
+    }
+}
+
+/**
+ * The subset of user settings that participate in LAN sync, treated as a single
+ * last-write-wins document so devices converge to the most recently edited settings.
+ */
+@Serializable
+data class SyncedSettings(
+    val labelName: String = Label.DEFAULT_LABEL_NAME,
+    val workdayStart: Int = LocalTime(5, 0).toSecondOfDay(),
+    val firstDayOfWeek: Int = DayOfWeek.MONDAY.isoDayNumber,
+    val workFinishedSound: String = "",
+    val breakFinishedSound: String = "",
+    val userSounds: Set<SoundData> = emptySet(),
+    val vibrationStrength: Int = 3,
+    val enableTorch: Boolean = false,
+    val flashScreen: Boolean = false,
+    val insistentNotification: Boolean = false,
+    val breakEndAlarm: Boolean = false,
+    val autoStartFocus: Boolean = false,
+    val autoStartBreak: Boolean = false,
+    val longBreakData: LongBreakData = LongBreakData(),
+    val breakBudgetData: BreakBudgetData = BreakBudgetData(),
+    val productivityReminderSettings: ProductivityReminderSettings = ProductivityReminderSettings(),
+    val uiSettings: UiSettings = UiSettings(),
+    val timerStyle: TimerStyleData = TimerStyleData(),
+    /** Epoch millis of the last edit, used for last-write-wins conflict resolution. */
+    val updatedAt: Long = 0L,
+) {
+    companion object {
+        fun from(appSettings: AppSettings, updatedAt: Long) = SyncedSettings(
+            labelName = appSettings.labelName,
+            workdayStart = appSettings.workdayStart,
+            firstDayOfWeek = appSettings.firstDayOfWeek,
+            workFinishedSound = appSettings.workFinishedSound,
+            breakFinishedSound = appSettings.breakFinishedSound,
+            userSounds = appSettings.userSounds,
+            vibrationStrength = appSettings.vibrationStrength,
+            enableTorch = appSettings.enableTorch,
+            flashScreen = appSettings.flashScreen,
+            insistentNotification = appSettings.insistentNotification,
+            breakEndAlarm = appSettings.breakEndAlarm,
+            autoStartFocus = appSettings.autoStartFocus,
+            autoStartBreak = appSettings.autoStartBreak,
+            longBreakData = appSettings.longBreakData,
+            breakBudgetData = appSettings.breakBudgetData,
+            productivityReminderSettings = appSettings.productivityReminderSettings,
+            uiSettings = appSettings.uiSettings,
+            timerStyle = appSettings.timerStyle,
+            updatedAt = updatedAt,
+        )
+    }
+}

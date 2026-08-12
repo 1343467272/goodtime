@@ -22,6 +22,7 @@ import com.apps.adrcotfas.goodtime.platform.PlatformConfiguration
 class FakePlatformConfiguration(
     override val isAndroid: Boolean = false,
 ) : PlatformConfiguration {
+    override val isDesktop: Boolean = false
     override val supportsInAppUpdates: Boolean = false
     override val supportsDynamicColor: Boolean = false
     override val supportsShowWhenLocked: Boolean = false

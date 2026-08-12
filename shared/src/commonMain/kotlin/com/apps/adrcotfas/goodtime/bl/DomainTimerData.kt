@@ -25,6 +25,7 @@ import com.apps.adrcotfas.goodtime.data.model.getLabelData
 import com.apps.adrcotfas.goodtime.data.model.isDefault
 import com.apps.adrcotfas.goodtime.data.settings.BreakBudgetData
 import com.apps.adrcotfas.goodtime.data.settings.LongBreakData
+import kotlinx.serialization.Serializable
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -85,6 +86,13 @@ data class DomainTimerData(
      */
     val runtime: TimerRuntimeState = TimerRuntimeState(),
     val completedMinutes: Long = 0, // minutes
+    /**
+     * True when the current runtime was mirrored from a peer rather than started locally.
+     * Mirrors don't save their own finished sessions (the leader already saved them) and
+     * don't announce their transitions. Transient: not persisted, so a restored process
+     * treats the timer as its own.
+     */
+    val isMirrored: Boolean = false,
 ) {
     fun reset() = DomainTimerData(
         isReady = isReady,
@@ -92,6 +100,7 @@ data class DomainTimerData(
         runtime = TimerRuntimeState(state = TimerState.RESET),
         longBreakData = longBreakData,
         breakBudgetData = breakBudgetData,
+        isMirrored = isMirrored,
     )
 
     fun getTimerProfile(): TimerProfile = label.profile
@@ -148,6 +157,7 @@ data class DomainTimerData(
     fun isCurrentSessionCountdown(): Boolean = getTimerProfile().isCountdown || runtime.type != TimerType.FOCUS
 }
 
+@Serializable
 enum class TimerState {
     RESET,
     RUNNING,
@@ -170,6 +180,7 @@ val TimerState.isFinished: Boolean
 val TimerState.isReset: Boolean
     get() = this == TimerState.RESET
 
+@Serializable
 enum class TimerType {
     FOCUS,
     BREAK,

@@ -30,6 +30,11 @@ interface PlatformConfiguration {
     val isAndroid: Boolean
 
     /**
+     * Whether the app runs as a desktop application (Windows/macOS/Linux).
+     */
+    val isDesktop: Boolean
+
+    /**
      * Whether the platform supports in-app updates.
      * Android (Google Play): true
      * Android (F-Droid): false

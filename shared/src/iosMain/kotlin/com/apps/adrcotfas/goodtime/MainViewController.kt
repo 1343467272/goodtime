@@ -33,11 +33,13 @@ import com.apps.adrcotfas.goodtime.di.distributionModule
 import com.apps.adrcotfas.goodtime.di.localDataModule
 import com.apps.adrcotfas.goodtime.di.mainModule
 import com.apps.adrcotfas.goodtime.di.platformModule
+import com.apps.adrcotfas.goodtime.di.syncModule
 import com.apps.adrcotfas.goodtime.di.timerManagerModule
 import com.apps.adrcotfas.goodtime.di.viewModelModule
 import com.apps.adrcotfas.goodtime.main.MainViewModel
 import com.apps.adrcotfas.goodtime.platform.PlatformContext
 import com.apps.adrcotfas.goodtime.settings.reminders.ReminderManager
+import com.apps.adrcotfas.goodtime.sync.SyncManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.koin.compose.KoinApplication
@@ -62,6 +64,7 @@ private fun AppWithKoin() {
                 coreBackupModule,
                 distributionModule,
                 timerManagerModule,
+                syncModule,
                 mainModule,
                 viewModelModule,
                 platformModule,
@@ -73,6 +76,7 @@ private fun AppWithKoin() {
 
         initNotificationHandler()
         initReminderManager()
+        initSyncManager()
 
         LaunchedEffect(Unit) {
             purchaseManager.start()
@@ -103,5 +107,14 @@ private fun initReminderManager() {
     val scope: CoroutineScope = koinInject(named(MAIN_SCOPE))
     scope.launch {
         reminderManager.init()
+    }
+}
+
+@Composable
+private fun initSyncManager() {
+    val syncManager: SyncManager = koinInject()
+    val scope: CoroutineScope = koinInject(named(MAIN_SCOPE))
+    scope.launch {
+        syncManager.ensureStarted()
     }
 }

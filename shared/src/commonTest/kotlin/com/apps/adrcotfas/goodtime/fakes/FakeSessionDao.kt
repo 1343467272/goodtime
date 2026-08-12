@@ -43,6 +43,7 @@ class FakeSessionDao : SessionDao {
         newLabel: String,
         newNotes: String,
         newIsWork: Boolean,
+        newUpdatedAt: Long,
         id: Long,
     ) {
         sessions.value =
@@ -55,6 +56,7 @@ class FakeSessionDao : SessionDao {
                         labelName = newLabel,
                         notes = newNotes,
                         isWork = newIsWork,
+                        updatedAt = newUpdatedAt,
                     )
                 } else {
                     it
@@ -62,14 +64,52 @@ class FakeSessionDao : SessionDao {
             }
     }
 
+    override suspend fun updateBySyncId(
+        newTimestamp: Long,
+        newDuration: Long,
+        newInterruptions: Long,
+        newLabel: String,
+        newNotes: String,
+        newIsWork: Boolean,
+        newIsArchived: Boolean,
+        newUpdatedAt: Long,
+        syncId: String,
+    ): Int {
+        var updated = 0
+        sessions.value =
+            sessions.value.map {
+                if (it.syncId == syncId) {
+                    updated++
+                    it.copy(
+                        timestamp = newTimestamp,
+                        duration = newDuration,
+                        interruptions = newInterruptions,
+                        labelName = newLabel,
+                        notes = newNotes,
+                        isWork = newIsWork,
+                        isArchived = newIsArchived,
+                        updatedAt = newUpdatedAt,
+                    )
+                } else {
+                    it
+                }
+            }
+        return updated
+    }
+
+    override suspend fun deleteBySyncId(syncId: String) {
+        sessions.value = sessions.value.filter { it.syncId != syncId }
+    }
+
     override suspend fun updateLabelByIds(
         newLabel: String,
+        newUpdatedAt: Long,
         ids: List<Long>,
     ) {
         sessions.value =
             sessions.value.map {
                 if (it.id in ids) {
-                    it.copy(labelName = newLabel)
+                    it.copy(labelName = newLabel, updatedAt = newUpdatedAt)
                 } else {
                     it
                 }
@@ -78,6 +118,7 @@ class FakeSessionDao : SessionDao {
 
     override suspend fun updateLabelByIdsExcept(
         newLabel: String,
+        newUpdatedAt: Long,
         ids: List<Long>,
         labels: List<String>,
         considerBreaks: Boolean,
@@ -85,7 +126,7 @@ class FakeSessionDao : SessionDao {
         sessions.value =
             sessions.value.map {
                 if ((considerBreaks || it.isWork) && it.id !in ids && it.labelName in labels) {
-                    it.copy(labelName = newLabel)
+                    it.copy(labelName = newLabel, updatedAt = newUpdatedAt)
                 } else {
                     it
                 }
@@ -93,6 +134,12 @@ class FakeSessionDao : SessionDao {
     }
 
     override fun selectAll(): Flow<List<LocalSession>> = sessions
+
+    override suspend fun selectAllOnce(): List<LocalSession> = sessions.value
+
+    override suspend fun selectBySyncId(syncId: String): LocalSession? = sessions.value.firstOrNull { it.syncId == syncId }
+
+    override suspend fun selectBySyncIdOrdered(): List<LocalSession> = sessions.value.filter { it.syncId.isNotEmpty() }.sortedBy { it.updatedAt }
 
     override fun selectAfter(timestamp: Long): Flow<List<LocalSession>> = sessions.map { sessions ->
         sessions.filter {

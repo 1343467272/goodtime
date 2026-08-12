@@ -47,6 +47,7 @@ class FakeLabelDao : LabelDao {
         newLongBreakDuration: Int,
         newSessionsBeforeLongBreak: Int,
         newWorkBreakRatio: Int,
+        newUpdatedAt: Long,
         name: String,
     ) {
         labels.value =
@@ -65,6 +66,7 @@ class FakeLabelDao : LabelDao {
                         longBreakDuration = newLongBreakDuration,
                         sessionsBeforeLongBreak = newSessionsBeforeLongBreak,
                         workBreakRatio = newWorkBreakRatio,
+                        updatedAt = newUpdatedAt,
                     )
                 } else {
                     it
@@ -72,14 +74,60 @@ class FakeLabelDao : LabelDao {
             }
     }
 
+    override suspend fun updateLabelSync(
+        newColorIndex: Int,
+        newOrderIndex: Long,
+        newUseDefaultTimeProfile: Boolean,
+        newTimerProfileName: String?,
+        newIsCountdown: Boolean,
+        newWorkDuration: Int,
+        newIsBreakEnabled: Boolean,
+        newBreakDuration: Int,
+        newIsLongBreakEnabled: Boolean,
+        newLongBreakDuration: Int,
+        newSessionsBeforeLongBreak: Int,
+        newWorkBreakRatio: Int,
+        newIsArchived: Boolean,
+        newUpdatedAt: Long,
+        name: String,
+    ): Int {
+        var updated = 0
+        labels.value =
+            labels.value.map {
+                if (it.name == name) {
+                    updated++
+                    it.copy(
+                        colorIndex = newColorIndex,
+                        orderIndex = newOrderIndex,
+                        timerProfileName = newTimerProfileName,
+                        useDefaultTimeProfile = newUseDefaultTimeProfile,
+                        isCountdown = newIsCountdown,
+                        workDuration = newWorkDuration,
+                        isBreakEnabled = newIsBreakEnabled,
+                        breakDuration = newBreakDuration,
+                        isLongBreakEnabled = newIsLongBreakEnabled,
+                        longBreakDuration = newLongBreakDuration,
+                        sessionsBeforeLongBreak = newSessionsBeforeLongBreak,
+                        workBreakRatio = newWorkBreakRatio,
+                        isArchived = newIsArchived,
+                        updatedAt = newUpdatedAt,
+                    )
+                } else {
+                    it
+                }
+            }
+        return updated
+    }
+
     override suspend fun updateOrderIndex(
         newOrderIndex: Int,
+        newUpdatedAt: Long,
         name: String,
     ) {
         labels.value =
             labels.value.map {
                 if (it.name == name) {
-                    it.copy(orderIndex = newOrderIndex.toLong())
+                    it.copy(orderIndex = newOrderIndex.toLong(), updatedAt = newUpdatedAt)
                 } else {
                     it
                 }
@@ -88,12 +136,13 @@ class FakeLabelDao : LabelDao {
 
     override suspend fun updateIsArchived(
         isArchived: Boolean,
+        newUpdatedAt: Long,
         name: String,
     ) {
         labels.value =
             labels.value.map {
                 if (it.name == name) {
-                    it.copy(isArchived = isArchived)
+                    it.copy(isArchived = isArchived, updatedAt = newUpdatedAt)
                 } else {
                     it
                 }
@@ -101,6 +150,8 @@ class FakeLabelDao : LabelDao {
     }
 
     override fun selectAll(): Flow<List<LocalLabel>> = labels
+
+    override suspend fun selectAllOnce(): List<LocalLabel> = labels.value
 
     override fun selectByArchived(isArchived: Boolean): Flow<List<LocalLabel>> = labels.map { labels ->
         labels.filter {

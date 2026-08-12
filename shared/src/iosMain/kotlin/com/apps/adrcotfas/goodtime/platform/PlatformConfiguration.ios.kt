@@ -22,6 +22,7 @@ package com.apps.adrcotfas.goodtime.platform
  */
 private class IosPlatformConfiguration : PlatformConfiguration {
     override val isAndroid: Boolean = false
+    override val isDesktop: Boolean = false
 
     /**
      * In-app updates are not supported on iOS App Store.

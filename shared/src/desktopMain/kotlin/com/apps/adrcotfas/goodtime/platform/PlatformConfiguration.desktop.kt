@@ -23,6 +23,7 @@ package com.apps.adrcotfas.goodtime.platform
  */
 private class DesktopPlatformConfiguration : PlatformConfiguration {
     override val isAndroid: Boolean = false
+    override val isDesktop: Boolean = true
     override val supportsInAppUpdates: Boolean = false
     override val supportsDynamicColor: Boolean = false
     override val supportsShowWhenLocked: Boolean = false

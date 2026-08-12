@@ -36,6 +36,7 @@ fun Label.toLocal(): LocalLabel = LocalLabel(
     sessionsBeforeLongBreak = timerProfile.sessionsBeforeLongBreak,
     workBreakRatio = timerProfile.workBreakRatio,
     isArchived = isArchived,
+    updatedAt = updatedAt,
 )
 
 fun LocalLabel.toExternal(timerProfile: TimerProfile? = null): Label = Label(
@@ -56,6 +57,7 @@ fun LocalLabel.toExternal(timerProfile: TimerProfile? = null): Label = Label(
         workBreakRatio = workBreakRatio,
     ),
     isArchived = isArchived,
+    updatedAt = updatedAt,
 )
 
 fun Session.toLocal() = LocalSession(
@@ -67,6 +69,8 @@ fun Session.toLocal() = LocalSession(
     notes = notes,
     isWork = isWork,
     isArchived = isArchived,
+    syncId = syncId,
+    updatedAt = updatedAt,
 )
 
 fun LocalSession.toExternal() = Session(
@@ -78,6 +82,8 @@ fun LocalSession.toExternal() = Session(
     notes = notes,
     isWork = isWork,
     isArchived = isArchived,
+    syncId = syncId,
+    updatedAt = updatedAt,
 )
 
 fun LocalTimerProfile.toExternal(): TimerProfile = TimerProfile(
@@ -106,5 +112,6 @@ fun TimerProfile.toLocal(): LocalTimerProfile {
         longBreakDuration = longBreakDuration,
         sessionsBeforeLongBreak = sessionsBeforeLongBreak,
         workBreakRatio = workBreakRatio,
+        updatedAt = updatedAt,
     )
 }

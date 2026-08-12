@@ -106,10 +106,6 @@ class FakeSettingsRepository(
         )
     }
 
-    override suspend fun setNotificationSoundVolume(volume: Int) = _settings.emit(
-        _settings.value.copy(notificationSoundVolume = volume),
-    )
-
     override suspend fun setVibrationStrength(strength: Int) = _settings.emit(
         _settings.value.copy(vibrationStrength = strength),
     )
@@ -126,6 +122,10 @@ class FakeSettingsRepository(
 
     override suspend fun setInsistentNotification(enabled: Boolean) = _settings.emit(
         _settings.value.copy(insistentNotification = enabled),
+    )
+
+    override suspend fun setBreakEndAlarm(enabled: Boolean) = _settings.emit(
+        _settings.value.copy(breakEndAlarm = enabled),
     )
 
     override suspend fun setAutoStartWork(enabled: Boolean) = _settings.emit(
@@ -230,5 +230,49 @@ class FakeSettingsRepository(
         _settings.emit(
             _settings.value.copy(persistedTimerState = null),
         )
+    }
+
+    override suspend fun setSyncSettings(syncSettings: com.apps.adrcotfas.goodtime.data.settings.SyncSettings) {
+        _settings.emit(
+            _settings.value.copy(syncSettings = syncSettings),
+        )
+    }
+
+    private val _syncedSettings = MutableStateFlow<com.apps.adrcotfas.goodtime.data.settings.SyncedSettings?>(null)
+    override val syncedSettings: Flow<com.apps.adrcotfas.goodtime.data.settings.SyncedSettings?> = _syncedSettings
+
+    override suspend fun saveSyncedSettings(syncedSettings: com.apps.adrcotfas.goodtime.data.settings.SyncedSettings) {
+        _syncedSettings.emit(syncedSettings)
+    }
+
+    override suspend fun applySyncedSettings(syncedSettings: com.apps.adrcotfas.goodtime.data.settings.SyncedSettings) {
+        saveSyncedSettings(syncedSettings)
+        setWorkDayStart(syncedSettings.workdayStart)
+        setFirstDayOfWeek(syncedSettings.firstDayOfWeek)
+        setWorkFinishedSound(syncedSettings.workFinishedSound)
+        setBreakFinishedSound(syncedSettings.breakFinishedSound)
+        syncedSettings.userSounds.forEach { addUserSound(it) }
+        setVibrationStrength(syncedSettings.vibrationStrength)
+        setEnableTorch(syncedSettings.enableTorch)
+        setEnableFlashScreen(syncedSettings.flashScreen)
+        setInsistentNotification(syncedSettings.insistentNotification)
+        setBreakEndAlarm(syncedSettings.breakEndAlarm)
+        setAutoStartWork(syncedSettings.autoStartFocus)
+        setAutoStartBreak(syncedSettings.autoStartBreak)
+        setLongBreakData(syncedSettings.longBreakData)
+        setBreakBudgetData(syncedSettings.breakBudgetData)
+        updateReminderSettings { syncedSettings.productivityReminderSettings }
+        updateUiSettings { syncedSettings.uiSettings }
+        updateTimerStyle { syncedSettings.timerStyle }
+        if (syncedSettings.labelName.isNotEmpty()) {
+            activateLabelWithName(syncedSettings.labelName)
+        }
+    }
+
+    private val _sessionTombstones = MutableStateFlow<Map<String, Long>>(emptyMap())
+    override val sessionTombstones: Flow<Map<String, Long>> = _sessionTombstones
+
+    override suspend fun saveSessionTombstones(tombstones: Map<String, Long>) {
+        _sessionTombstones.emit(tombstones)
     }
 }

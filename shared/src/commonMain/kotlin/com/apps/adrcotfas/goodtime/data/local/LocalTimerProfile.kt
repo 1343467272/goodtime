@@ -48,6 +48,12 @@ data class LocalTimerProfile(
     val sessionsBeforeLongBreak: Int,
     @ColumnInfo(defaultValue = "$DEFAULT_WORK_BREAK_RATIO")
     val workBreakRatio: Int,
+    /**
+     * Wall-clock epoch millis of the last local modification, used for
+     * last-write-wins conflict resolution during sync.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val updatedAt: Long = 0,
 ) {
     companion object {
         const val DEFAULT_PROFILE_NAME = "25/5"

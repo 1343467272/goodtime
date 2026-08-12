@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Goodtime Productivity
+    Copyright (C) 2025 Adrian Cotfas
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<resources>
+    <string name="settings_sync">Sync</string>
+    <string name="settings_sync_status">Status</string>
+    <string name="settings_sync_desc">Share sessions, settings and the live timer with your devices over the local network</string>
+    <string name="settings_sync_enable_title">Sync with nearby devices</string>
+    <string name="settings_sync_enable_desc">All devices must be on the same Wi-Fi network and use the same port</string>
+    <string name="settings_sync_device_name">Device name</string>
+    <string name="settings_sync_device_name_desc">Shown to other devices</string>
+    <string name="settings_sync_port">Port</string>
+    <string name="settings_sync_port_desc">All synced devices must use the same port</string>
+    <string name="settings_sync_device_id">Device ID</string>
+    <string name="settings_sync_server_running">Server running on port %1$d</string>
+    <string name="settings_sync_server_starting">Starting server…</string>
+    <string name="settings_sync_server_stopped">Sync is disabled</string>
+    <string name="settings_sync_connected_devices">Connected devices: %1$d</string>
+    <string name="settings_sync_connect_title">Connect to a device</string>
+    <string name="settings_sync_connect_hint">Device IP address</string>
+    <string name="settings_sync_connect_button">Connect</string>
+    <string name="settings_sync_last_sync">Last synced: %1$s</string>
+    <string name="settings_sync_never_synced">Not synced yet</string>
+    <string name="settings_sync_edit_name">Edit device name</string>
+    <string name="settings_sync_edit_port">Edit port</string>
+</resources>

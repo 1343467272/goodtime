@@ -371,6 +371,30 @@ val MIGRATION_9_10: Migration =
             connection.execSQL("PRAGMA foreign_keys=on;")
         }
     }
+val MIGRATION_10_11: Migration =
+    object : Migration(10, 11) {
+        override fun migrate(connection: SQLiteConnection) {
+            // Session sync identity + last-write-wins timestamps for the LAN sync feature.
+            connection.execSQL(
+                "ALTER TABLE localSession ADD COLUMN syncId TEXT NOT NULL DEFAULT ''",
+            )
+            connection.execSQL(
+                "ALTER TABLE localSession ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0",
+            )
+            // Backfill a unique syncId for pre-existing rows (they all share ''), otherwise the
+            // unique index below would fail. Seed updatedAt from the session timestamp so legacy
+            // data participates in last-write-wins resolution.
+            connection.execSQL("UPDATE localSession SET syncId = lower(hex(randomblob(16))) WHERE syncId = '';")
+            connection.execSQL("UPDATE localSession SET updatedAt = timestamp WHERE updatedAt = 0;")
+            connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_localSession_syncId ON localSession(syncId);")
+            connection.execSQL(
+                "ALTER TABLE localLabel ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0",
+            )
+            connection.execSQL(
+                "ALTER TABLE localTimerProfile ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0",
+            )
+        }
+    }
 val MIGRATIONS =
     arrayOf(
         MIGRATION_1_2,
@@ -382,4 +406,5 @@ val MIGRATIONS =
         MIGRATION_7_8,
         MIGRATION_8_9,
         MIGRATION_9_10,
+        MIGRATION_10_11,
     )

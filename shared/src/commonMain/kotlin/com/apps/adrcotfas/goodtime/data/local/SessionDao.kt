@@ -35,7 +35,7 @@ interface SessionDao {
     @Query(
         """
         UPDATE localSession
-        SET timestamp = :newTimestamp, duration = :newDuration, interruptions = :newInterruptions, labelName = :newLabel, notes = :newNotes, isWork = :newIsWork
+        SET timestamp = :newTimestamp, duration = :newDuration, interruptions = :newInterruptions, labelName = :newLabel, notes = :newNotes, isWork = :newIsWork, updatedAt = :newUpdatedAt
         WHERE id = :id
     """,
     )
@@ -46,18 +46,42 @@ interface SessionDao {
         newLabel: String,
         newNotes: String,
         newIsWork: Boolean,
+        newUpdatedAt: Long,
         id: Long,
     )
 
-    @Query("UPDATE localSession SET labelName = :newLabel WHERE id IN (:ids)")
+    @Query(
+        """
+        UPDATE localSession
+        SET timestamp = :newTimestamp, duration = :newDuration, interruptions = :newInterruptions, labelName = :newLabel, notes = :newNotes, isWork = :newIsWork, isArchived = :newIsArchived, updatedAt = :newUpdatedAt
+        WHERE syncId = :syncId
+    """,
+    )
+    suspend fun updateBySyncId(
+        newTimestamp: Long,
+        newDuration: Long,
+        newInterruptions: Long,
+        newLabel: String,
+        newNotes: String,
+        newIsWork: Boolean,
+        newIsArchived: Boolean,
+        newUpdatedAt: Long,
+        syncId: String,
+    ): Int
+
+    @Query("DELETE FROM localSession WHERE syncId = :syncId")
+    suspend fun deleteBySyncId(syncId: String)
+
+    @Query("UPDATE localSession SET labelName = :newLabel, updatedAt = :newUpdatedAt WHERE id IN (:ids)")
     suspend fun updateLabelByIds(
         newLabel: String,
+        newUpdatedAt: Long,
         ids: List<Long>,
     )
 
     @Query(
         """
-        UPDATE localSession SET labelName = :newLabel
+        UPDATE localSession SET labelName = :newLabel, updatedAt = :newUpdatedAt
         WHERE isArchived = 0
         AND id NOT IN (:ids)
         AND labelName IN (:labels)
@@ -66,6 +90,7 @@ interface SessionDao {
     )
     suspend fun updateLabelByIdsExcept(
         newLabel: String,
+        newUpdatedAt: Long,
         ids: List<Long>,
         labels: List<String>,
         considerBreaks: Boolean,
@@ -73,6 +98,15 @@ interface SessionDao {
 
     @Query("SELECT * FROM localSession ORDER BY timestamp DESC")
     fun selectAll(): Flow<List<LocalSession>>
+
+    @Query("SELECT * FROM localSession ORDER BY timestamp DESC")
+    suspend fun selectAllOnce(): List<LocalSession>
+
+    @Query("SELECT * FROM localSession WHERE syncId = :syncId")
+    suspend fun selectBySyncId(syncId: String): LocalSession?
+
+    @Query("SELECT * FROM localSession WHERE syncId != '' ORDER BY updatedAt")
+    suspend fun selectBySyncIdOrdered(): List<LocalSession>
 
     @Query("SELECT * FROM localSession WHERE timestamp > :timestamp ORDER BY timestamp DESC")
     fun selectAfter(timestamp: Long): Flow<List<LocalSession>>
