@@ -38,6 +38,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -95,12 +96,20 @@ import com.apps.adrcotfas.goodtime.sync.SyncManager
 import com.apps.adrcotfas.goodtime.ui.ConfirmationDialog
 import compose.icons.EvaIcons
 import compose.icons.evaicons.Outline
+import compose.icons.evaicons.outline.CloudDownload
+import compose.icons.evaicons.outline.CloudUpload
 import compose.icons.evaicons.outline.Sync
 import goodtime_productivity.shared.generated.resources.Res
 import goodtime_productivity.shared.generated.resources.main_reset_break_budget
 import goodtime_productivity.shared.generated.resources.main_sync_done
 import goodtime_productivity.shared.generated.resources.main_sync_no_connections
 import goodtime_productivity.shared.generated.resources.main_sync_now
+import goodtime_productivity.shared.generated.resources.main_sync_overwrite
+import goodtime_productivity.shared.generated.resources.main_sync_overwrite_desc
+import goodtime_productivity.shared.generated.resources.main_sync_overwrite_done
+import goodtime_productivity.shared.generated.resources.main_sync_pull
+import goodtime_productivity.shared.generated.resources.main_sync_pull_desc
+import goodtime_productivity.shared.generated.resources.main_sync_pull_done
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -442,8 +451,16 @@ fun MainScreen(
     }
 }
 
+private enum class SyncAction {
+    SYNC,
+    OVERWRITE,
+    PULL,
+}
+
 private enum class SyncFeedback {
     SYNCED,
+    OVERWRITTEN,
+    PULLED,
     NO_CONNECTIONS,
 }
 
@@ -456,6 +473,32 @@ private fun ManualSyncButton(
     val scope = rememberCoroutineScope()
     var feedback by remember { mutableStateOf<SyncFeedback?>(null) }
     var feedbackJob by remember { mutableStateOf<Job?>(null) }
+    var pendingAction by remember { mutableStateOf<SyncAction?>(null) }
+
+    fun runAction(action: SyncAction) {
+        feedbackJob?.cancel()
+        feedbackJob =
+            scope.launch {
+                val done =
+                    when (action) {
+                        SyncAction.SYNC -> syncManager.syncNow()
+                        SyncAction.OVERWRITE -> syncManager.overwritePeers()
+                        SyncAction.PULL -> syncManager.pullFromPeers()
+                    }
+                feedback =
+                    if (done) {
+                        when (action) {
+                            SyncAction.SYNC -> SyncFeedback.SYNCED
+                            SyncAction.OVERWRITE -> SyncFeedback.OVERWRITTEN
+                            SyncAction.PULL -> SyncFeedback.PULLED
+                        }
+                    } else {
+                        SyncFeedback.NO_CONNECTIONS
+                    }
+                delay(SYNC_FEEDBACK_DURATION_MS)
+                feedback = null
+            }
+    }
 
     AnimatedVisibility(
         modifier = modifier,
@@ -464,34 +507,42 @@ private fun ManualSyncButton(
         exit = fadeOut(),
     ) {
         Column(horizontalAlignment = Alignment.End) {
-            IconButton(
-                modifier = Modifier.alpha(0.5f),
-                onClick = {
-                    feedbackJob?.cancel()
-                    feedbackJob =
-                        scope.launch {
-                            val synced = syncManager.syncNow()
-                            feedback =
-                                if (synced) {
-                                    SyncFeedback.SYNCED
-                                } else {
-                                    SyncFeedback.NO_CONNECTIONS
-                                }
-                            delay(SYNC_FEEDBACK_DURATION_MS)
-                            feedback = null
-                        }
-                },
-            ) {
-                Icon(
-                    imageVector = EvaIcons.Outline.Sync,
-                    contentDescription = stringResource(Res.string.main_sync_now),
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    modifier = Modifier.alpha(0.5f),
+                    onClick = { pendingAction = SyncAction.OVERWRITE },
+                ) {
+                    Icon(
+                        imageVector = EvaIcons.Outline.CloudUpload,
+                        contentDescription = stringResource(Res.string.main_sync_overwrite),
+                    )
+                }
+                IconButton(
+                    modifier = Modifier.alpha(0.5f),
+                    onClick = { runAction(SyncAction.SYNC) },
+                ) {
+                    Icon(
+                        imageVector = EvaIcons.Outline.Sync,
+                        contentDescription = stringResource(Res.string.main_sync_now),
+                    )
+                }
+                IconButton(
+                    modifier = Modifier.alpha(0.5f),
+                    onClick = { pendingAction = SyncAction.PULL },
+                ) {
+                    Icon(
+                        imageVector = EvaIcons.Outline.CloudDownload,
+                        contentDescription = stringResource(Res.string.main_sync_pull),
+                    )
+                }
             }
             AnimatedVisibility(visible = feedback != null, enter = fadeIn(), exit = fadeOut()) {
                 Text(
                     text =
                     when (feedback) {
                         SyncFeedback.SYNCED -> stringResource(Res.string.main_sync_done)
+                        SyncFeedback.OVERWRITTEN -> stringResource(Res.string.main_sync_overwrite_done)
+                        SyncFeedback.PULLED -> stringResource(Res.string.main_sync_pull_done)
                         SyncFeedback.NO_CONNECTIONS ->
                             stringResource(Res.string.main_sync_no_connections)
                         null -> ""
@@ -502,6 +553,22 @@ private fun ManualSyncButton(
                 )
             }
         }
+    }
+
+    pendingAction?.let { action ->
+        val isOverwrite = action == SyncAction.OVERWRITE
+        ConfirmationDialog(
+            title = stringResource(if (isOverwrite) Res.string.main_sync_overwrite else Res.string.main_sync_pull),
+            subtitle =
+            stringResource(
+                if (isOverwrite) Res.string.main_sync_overwrite_desc else Res.string.main_sync_pull_desc,
+            ),
+            onConfirm = {
+                pendingAction = null
+                runAction(action)
+            },
+            onDismiss = { pendingAction = null },
+        )
     }
 }
 

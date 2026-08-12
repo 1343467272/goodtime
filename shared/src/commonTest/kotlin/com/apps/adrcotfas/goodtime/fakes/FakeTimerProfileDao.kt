@@ -58,6 +58,10 @@ class FakeTimerProfileDao : TimerProfileDao {
         timerProfiles.value = currentList
     }
 
+    override suspend fun deleteAll() {
+        timerProfiles.value = emptyList()
+    }
+
     override suspend fun updateProfileSync(
         newIsCountdown: Boolean,
         newWorkDuration: Int,

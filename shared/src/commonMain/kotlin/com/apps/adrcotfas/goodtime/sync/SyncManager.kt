@@ -413,6 +413,31 @@ class SyncManager(
         val active = connectionMutex.withLock { connections.toList() }
         if (active.isEmpty()) return false
         broadcastSnapshot(buildSnapshot())
+        updateLastSyncTimestamp()
+        return true
+    }
+
+    /**
+     * Sends this device's full state to every connected peer as a forced overwrite: the peers
+     * replace their local state with it instead of merging. Returns whether any peer was connected.
+     */
+    suspend fun overwritePeers(): Boolean {
+        val active = connectionMutex.withLock { connections.toList() }
+        if (active.isEmpty()) return false
+        val snapshot = buildSnapshot()
+        active.forEach { connection -> safeSend { connection.sendOverwriteSnapshot(snapshot) } }
+        updateLastSyncTimestamp()
+        return true
+    }
+
+    /**
+     * Asks every connected peer to send its full state; each answer replaces this device's
+     * local state (see [onOverwriteSnapshotInternal]). Returns whether any peer was connected.
+     */
+    suspend fun pullFromPeers(): Boolean {
+        val active = connectionMutex.withLock { connections.toList() }
+        if (active.isEmpty()) return false
+        active.forEach { connection -> safeSend { connection.sendPullRequest() } }
         return true
     }
 
@@ -465,6 +490,12 @@ class SyncManager(
                                 updatePeersStatus()
                             },
                             onSnapshot = ::onSnapshotInternal,
+                            onOverwriteSnapshot = ::onOverwriteSnapshotInternal,
+                            onPullRequest = { connection ->
+                                coroutineScope.launch {
+                                    safeSend { connection.sendOverwriteSnapshot(buildSnapshot()) }
+                                }
+                            },
                             onTimerState = ::onTimerStateInternal,
                             onSettings = ::onSettingsInternal,
                             onDisconnected = { conn ->
@@ -571,10 +602,7 @@ class SyncManager(
             timerManager.applySyncedTimerState(resolvedTimerState)
         }
 
-        val syncTimestamp = timeProvider.now()
-        val currentSyncSettings = settingsRepo.settings.first().syncSettings
-        settingsRepo.setSyncSettings(currentSyncSettings.copy(lastSyncTimestamp = syncTimestamp))
-        _status.update { it.copy(lastSyncTimestamp = syncTimestamp) }
+        updateLastSyncTimestamp()
 
         val mergedSnapshot =
             SnapshotPayload(
@@ -594,6 +622,37 @@ class SyncManager(
             }
         }
         broadcastSnapshot(mergedSnapshot)
+    }
+
+    /**
+     * Applies a forced overwrite from a peer: this device's sessions, labels, timer profiles,
+     * settings, tombstones and timer state are all replaced by the received snapshot, without
+     * merging. Used by "overwrite other device" (this device is the target) and "pull from
+     * device" (this device requested the snapshot). The local flow collectors then broadcast
+     * the adopted state to the remaining peers so the whole group converges.
+     */
+    private suspend fun onOverwriteSnapshotInternal(remote: SnapshotPayload) {
+        localDataRepo.replaceAllSyncedSessions(remote.sessions)
+        localDataRepo.replaceAllSyncedLabels(remote.labels)
+        localDataRepo.replaceAllSyncedTimerProfiles(remote.timerProfiles)
+        settingsRepo.saveSessionTombstones(remote.deletedSessionTombstones)
+
+        if (remote.settings != null) {
+            settingsRepo.saveSyncedSettings(remote.settings)
+            settingsRepo.applySyncedSettings(remote.settings)
+        }
+
+        remote.timerState?.let { state -> timerManagerProvider().applySyncedTimerState(state) }
+
+        updateLastSyncTimestamp()
+        log.i { "sync state overwritten by peer (${remote.sessions.size} sessions)" }
+    }
+
+    private suspend fun updateLastSyncTimestamp() {
+        val syncTimestamp = timeProvider.now()
+        val currentSyncSettings = settingsRepo.settings.first().syncSettings
+        settingsRepo.setSyncSettings(currentSyncSettings.copy(lastSyncTimestamp = syncTimestamp))
+        _status.update { it.copy(lastSyncTimestamp = syncTimestamp) }
     }
 
     private suspend fun onTimerStateInternal(remote: SyncedTimerState) {

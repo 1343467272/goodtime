@@ -41,6 +41,10 @@ object SyncMessageTypes {
     const val SNAPSHOT = "snapshot"
     const val TIMER_STATE = "timerState"
     const val SETTINGS = "settings"
+    /** The peer replaces its local state with this snapshot instead of merging. */
+    const val OVERWRITE_SNAPSHOT = "overwriteSnapshot"
+    /** Ask the peer to answer with its current state as an OVERWRITE_SNAPSHOT. */
+    const val PULL_REQUEST = "pullRequest"
 }
 
 /** A connected sync peer whose identity has been exchanged. */

@@ -51,4 +51,10 @@
     <string name="main_sync_now">立即同步</string>
     <string name="main_sync_done">已同步</string>
     <string name="main_sync_no_connections">未連接裝置</string>
+    <string name="main_sync_overwrite">覆蓋其他裝置</string>
+    <string name="main_sync_overwrite_desc">用本裝置的資料取代其他裝置的會話、標籤、設定和計時器。此操作無法復原。</string>
+    <string name="main_sync_overwrite_done">已覆蓋裝置</string>
+    <string name="main_sync_pull">從其他裝置拉取</string>
+    <string name="main_sync_pull_desc">用其他裝置的資料取代本裝置的會話、標籤、設定和計時器。此操作無法復原。</string>
+    <string name="main_sync_pull_done">已拉取</string>
 </resources>

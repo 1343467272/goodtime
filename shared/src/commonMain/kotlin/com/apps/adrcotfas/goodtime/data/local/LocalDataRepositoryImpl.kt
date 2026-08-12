@@ -430,4 +430,19 @@ internal class LocalDataRepositoryImpl(
             }
         }
     }
+
+    override suspend fun replaceAllSyncedSessions(sessions: List<Session>) {
+        sessionDao.deleteAll()
+        applySyncedSessions(sessions, emptyList())
+    }
+
+    override suspend fun replaceAllSyncedLabels(labels: List<Label>) {
+        labelDao.deleteAll()
+        applySyncedLabels(labels)
+    }
+
+    override suspend fun replaceAllSyncedTimerProfiles(profiles: List<TimerProfile>) {
+        timerProfileDao.deleteAll()
+        applySyncedTimerProfiles(profiles)
+    }
 }

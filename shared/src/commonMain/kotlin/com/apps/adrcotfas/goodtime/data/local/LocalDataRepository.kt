@@ -150,4 +150,19 @@ interface LocalDataRepository {
     suspend fun applySyncedLabels(labels: List<Label>)
     
     suspend fun applySyncedTimerProfiles(profiles: List<TimerProfile>)
+    
+    /**
+     * Replaces all local sessions with [sessions] (used by forced sync overwrites).
+     */
+    suspend fun replaceAllSyncedSessions(sessions: List<Session>)
+    
+    /**
+     * Replaces all local labels with [labels] (used by forced sync overwrites).
+     */
+    suspend fun replaceAllSyncedLabels(labels: List<Label>)
+    
+    /**
+     * Replaces all local timer profiles with [profiles] (used by forced sync overwrites).
+     */
+    suspend fun replaceAllSyncedTimerProfiles(profiles: List<TimerProfile>)
 }

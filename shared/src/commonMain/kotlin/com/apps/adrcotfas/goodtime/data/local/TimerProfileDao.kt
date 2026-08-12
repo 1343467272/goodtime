@@ -42,6 +42,9 @@ interface TimerProfileDao {
     @Query("DELETE FROM localTimerProfile WHERE name = :name")
     suspend fun deleteByName(name: String)
 
+    @Query("DELETE FROM localTimerProfile")
+    suspend fun deleteAll()
+
     @Query(
         """
         UPDATE localTimerProfile SET

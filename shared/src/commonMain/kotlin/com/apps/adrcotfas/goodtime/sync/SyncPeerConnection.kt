@@ -51,6 +51,8 @@ class SyncPeerConnection(
     private val localPort: Int,
     private val onHello: suspend (SyncPeerConnection, HelloPayload) -> Unit,
     private val onSnapshot: suspend (SnapshotPayload) -> Unit,
+    private val onOverwriteSnapshot: suspend (SnapshotPayload) -> Unit,
+    private val onPullRequest: suspend (SyncPeerConnection) -> Unit,
     private val onTimerState: suspend (SyncedTimerState) -> Unit,
     private val onSettings: suspend (SyncedSettings) -> Unit,
     private val onDisconnected: suspend (SyncPeerConnection) -> Unit,
@@ -101,6 +103,17 @@ class SyncPeerConnection(
                         onSnapshot(remote)
                     }
 
+                    SyncMessageTypes.OVERWRITE_SNAPSHOT -> {
+                        val remote =
+                            runCatching { json.decodeFromString(SnapshotPayload.serializer(), envelope.payload) }
+                                .getOrNull() ?: return@collect
+                        onOverwriteSnapshot(remote)
+                    }
+
+                    SyncMessageTypes.PULL_REQUEST -> {
+                        onPullRequest(this)
+                    }
+
                     SyncMessageTypes.TIMER_STATE -> {
                         val payload =
                             runCatching { json.decodeFromString(TimerStatePayload.serializer(), envelope.payload) }
@@ -123,6 +136,17 @@ class SyncPeerConnection(
 
     suspend fun sendSnapshot(snapshot: SnapshotPayload) {
         sendEnvelope(SyncMessageTypes.SNAPSHOT, json.encodeToString(SnapshotPayload.serializer(), snapshot))
+    }
+
+    suspend fun sendOverwriteSnapshot(snapshot: SnapshotPayload) {
+        sendEnvelope(
+            SyncMessageTypes.OVERWRITE_SNAPSHOT,
+            json.encodeToString(SnapshotPayload.serializer(), snapshot),
+        )
+    }
+
+    suspend fun sendPullRequest() {
+        sendEnvelope(SyncMessageTypes.PULL_REQUEST, "")
     }
 
     suspend fun sendTimerState(state: SyncedTimerState) {

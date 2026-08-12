@@ -51,4 +51,10 @@
     <string name="main_sync_now">立即同步</string>
     <string name="main_sync_done">已同步</string>
     <string name="main_sync_no_connections">未连接设备</string>
+    <string name="main_sync_overwrite">覆盖其他设备</string>
+    <string name="main_sync_overwrite_desc">用本设备的数据替换其他设备的会话、标签、设置和计时器。此操作无法撤销。</string>
+    <string name="main_sync_overwrite_done">已覆盖设备</string>
+    <string name="main_sync_pull">从其他设备拉取</string>
+    <string name="main_sync_pull_desc">用其他设备的数据替换本设备的会话、标签、设置和计时器。此操作无法撤销。</string>
+    <string name="main_sync_pull_done">已拉取</string>
 </resources>

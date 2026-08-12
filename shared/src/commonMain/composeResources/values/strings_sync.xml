@@ -51,4 +51,10 @@
     <string name="main_sync_now">Sync now</string>
     <string name="main_sync_done">Synced</string>
     <string name="main_sync_no_connections">No devices connected</string>
+    <string name="main_sync_overwrite">Overwrite device</string>
+    <string name="main_sync_overwrite_desc">Replace the other device\'s sessions, labels, settings and timer with this device\'s. The other device cannot undo this.</string>
+    <string name="main_sync_overwrite_done">Device overwritten</string>
+    <string name="main_sync_pull">Pull from device</string>
+    <string name="main_sync_pull_desc">Replace this device\'s sessions, labels, settings and timer with the other device\'s. This cannot be undone.</string>
+    <string name="main_sync_pull_done">Pulled</string>
 </resources>
