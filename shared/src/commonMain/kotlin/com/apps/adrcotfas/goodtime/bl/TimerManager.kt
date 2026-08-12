@@ -741,12 +741,18 @@ class TimerManager(
             remainingMillisAtPause = runtime.timeAtPause,
             endTimeWallClock = if (runtime.endTime > 0) now - elapsedRealtime + runtime.endTime else 0,
             startTimeWallClock =
-            if (!isCountdown && type.isFocus && runtime.lastStartTime > 0) {
-                now - elapsedRealtime + runtime.lastStartTime
+            if (!isCountdown && type.isFocus && runtime.startTime > 0) {
+                now - elapsedRealtime + runtime.startTime
             } else {
                 0
             },
             timeSpentPaused = runtime.timeSpentPaused,
+            durationMillis =
+            if (runtime.state == TimerState.FINISHED) {
+                (runtime.endTime - runtime.startTime).coerceAtLeast(0)
+            } else {
+                0
+            },
             updatedAt = lastTimerEventWallClock,
         )
     }
@@ -765,14 +771,23 @@ class TimerManager(
         val now = timeProvider.now()
         val offset = now - elapsedRealtime
 
+        // For count-up focus the session's wall-clock start is synced so the mirror can
+        // reconstruct the actual elapsed focus time (instead of the time it applied the state).
+        val sessionStart =
+            if (!state.isCountdown && state.type.isFocus && state.startTimeWallClock > 0) {
+                state.startTimeWallClock - offset
+            } else {
+                0
+            }
+
         val runtime =
             when (state.state) {
                 TimerState.RESET -> TimerRuntimeState(state = TimerState.RESET)
 
                 TimerState.RUNNING ->
                     TimerRuntimeState(
-                        startTime = if (!state.isCountdown && state.type.isFocus) state.startTimeWallClock - offset else 0,
-                        lastStartTime = elapsedRealtime,
+                        startTime = sessionStart,
+                        lastStartTime = sessionStart,
                         endTime = if (state.isCountdown && state.endTimeWallClock > 0) state.endTimeWallClock - offset else 0,
                         state = TimerState.RUNNING,
                         type = state.type,
@@ -781,6 +796,8 @@ class TimerManager(
 
                 TimerState.PAUSED ->
                     TimerRuntimeState(
+                        startTime = sessionStart,
+                        lastStartTime = sessionStart,
                         lastPauseTime = elapsedRealtime,
                         endTime = if (state.isCountdown && state.endTimeWallClock > 0) state.endTimeWallClock - offset else 0,
                         timeAtPause = state.remainingMillisAtPause,
@@ -789,13 +806,24 @@ class TimerManager(
                         timeSpentPaused = state.timeSpentPaused,
                     )
 
-                TimerState.FINISHED ->
+                TimerState.FINISHED -> {
+                    // Anchor startTime so the finished session duration is the actual one, not
+                    // "elapsedRealtime - 0" (device uptime), which previously inflated the
+                    // reported focus time and could be saved as a bogus session after restart.
+                    val start =
+                        if (state.durationMillis > 0) {
+                            (elapsedRealtime - state.durationMillis).coerceAtLeast(0)
+                        } else {
+                            sessionStart
+                        }
                     TimerRuntimeState(
+                        startTime = start,
                         endTime = elapsedRealtime,
                         state = TimerState.FINISHED,
                         type = state.type,
                         timeSpentPaused = state.timeSpentPaused,
                     )
+                }
             }
 
         _timerData.update {

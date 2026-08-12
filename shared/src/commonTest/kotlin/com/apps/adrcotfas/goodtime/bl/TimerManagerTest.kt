@@ -36,6 +36,7 @@ import com.apps.adrcotfas.goodtime.fakes.FakeSessionDao
 import com.apps.adrcotfas.goodtime.fakes.FakeSettingsRepository
 import com.apps.adrcotfas.goodtime.fakes.FakeTimeProvider
 import com.apps.adrcotfas.goodtime.fakes.FakeTimerProfileDao
+import com.apps.adrcotfas.goodtime.sync.SyncedTimerState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
@@ -48,6 +49,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -1062,6 +1064,61 @@ class TimerManagerTest {
             timerManager.timerData.value.breakBudgetData.breakBudget,
             expectedBreakBudget + extraBreakBudget,
             "The break budget should have been recalculated",
+        )
+    }
+
+    @Test
+    fun `Apply synced finished state reports the real duration not device uptime`() = runTest {
+        // A mirror device that has been booted for two days receives a finished 25-minute session.
+        timeProvider.elapsedRealtime = 2.days.inWholeMilliseconds
+        val syncedState =
+            SyncedTimerState(
+                state = TimerState.FINISHED,
+                type = TimerType.FOCUS,
+                isFocus = true,
+                isCountdown = true,
+                labelName = defaultLabel.name,
+                durationMillis = 25.minutes.inWholeMilliseconds,
+                timeSpentPaused = 0,
+                updatedAt = 1,
+            )
+        timerManager.applySyncedTimerState(syncedState)
+
+        assertEquals(
+            25L,
+            timerManager.timerData.value.completedMinutes,
+            "focus time must reflect the synced session duration, not device uptime",
+        )
+        assertEquals(
+            25.minutes.inWholeMilliseconds,
+            timerManager.timerData.value.runtime.endTime - timerManager.timerData.value.runtime.startTime,
+            "the anchored startTime must preserve the actual session duration",
+        )
+    }
+
+    @Test
+    fun `Count-up focus round trip through sync keeps elapsed time after pause and resume`() = runTest {
+        settingsRepo.activateLabelWithName(countUpLabel.name)
+        timerManager.setup()
+        timerManager.start(TimerType.FOCUS)
+
+        timeProvider.elapsedRealtime += 10.minutes.inWholeMilliseconds
+        timerManager.toggle() // pause
+        timeProvider.elapsedRealtime += 5.minutes.inWholeMilliseconds
+        timerManager.toggle() // resume
+        timeProvider.elapsedRealtime += 5.minutes.inWholeMilliseconds
+        testScope.advanceTimeBy(5.minutes)
+
+        val synced = timerManager.toSyncedTimerState()!!
+        timerManager.applySyncedTimerState(synced)
+
+        val elapsedFocus =
+            timeProvider.elapsedRealtime - timerManager.timerData.value.runtime.startTime -
+                timerManager.timerData.value.runtime.timeSpentPaused
+        assertEquals(
+            15.minutes.inWholeMilliseconds,
+            elapsedFocus,
+            "the mirrored count-up session must keep 15 minutes of focus, not lose the pre-pause time",
         )
     }
 

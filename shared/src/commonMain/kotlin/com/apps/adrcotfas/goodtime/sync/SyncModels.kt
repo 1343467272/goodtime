@@ -105,6 +105,7 @@ data class TimerStatePayload(
  * @param startTimeWallClock epoch millis when the current work session (re)started; used for count-up focus
  * @param remainingMillisAtPause remaining millis at pause (only meaningful when [state] is PAUSED)
  * @param timeSpentPaused total millis paused during the session
+ * @param durationMillis total elapsed session duration (endTime - startTime), set when [state] is FINISHED
  */
 @Serializable
 data class SyncedTimerState(
@@ -117,6 +118,7 @@ data class SyncedTimerState(
     val endTimeWallClock: Long = 0,
     val startTimeWallClock: Long = 0,
     val timeSpentPaused: Long = 0,
+    val durationMillis: Long = 0,
     /** Epoch millis of the last timer event, used for last-write-wins resolution. */
     val updatedAt: Long = 0,
 )
