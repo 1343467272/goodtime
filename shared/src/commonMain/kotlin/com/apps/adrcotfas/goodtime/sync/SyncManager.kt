@@ -516,6 +516,8 @@ class SyncManager(
         val mergedProfiles = syncEngine.mergeTimerProfiles(local.timerProfiles, remote.timerProfiles)
         val mergedSettings = syncEngine.mergeSyncedSettings(local.settings, remote.settings)
         val mergedTimerState = syncEngine.mergeTimerState(local.timerState, remote.timerState)
+        val resolvedTimerState =
+            mergedTimerState?.let { syncEngine.pauseOnOverwrite(local.timerState, it, timeProvider.now()) }
 
         localDataRepo.applySyncedSessions(sessionMerge.sessionsToApply, sessionMerge.deletedSyncIds)
         localDataRepo.applySyncedLabels(mergedLabels)
@@ -528,8 +530,8 @@ class SyncManager(
         }
 
         val timerManager = timerManagerProvider()
-        if (mergedTimerState != null && mergedTimerState != local.timerState) {
-            timerManager.applySyncedTimerState(mergedTimerState)
+        if (resolvedTimerState != null && resolvedTimerState != local.timerState) {
+            timerManager.applySyncedTimerState(resolvedTimerState)
         }
 
         val syncTimestamp = timeProvider.now()
@@ -544,7 +546,7 @@ class SyncManager(
                 labels = mergedLabels,
                 timerProfiles = mergedProfiles,
                 settings = mergedSettings,
-                timerState = mergedTimerState ?: local.timerState,
+                timerState = resolvedTimerState ?: local.timerState,
             )
 
         stateMutex.withLock {
@@ -561,17 +563,20 @@ class SyncManager(
         val timerManager = timerManagerProvider()
         val local = timerManager.toSyncedTimerState()
         val merged = syncEngine.mergeTimerState(local, remote) ?: return
-        if (merged != local) {
-            timerManager.applySyncedTimerState(merged)
+        // If this device's own state got overwritten by a different RUNNING session, pause
+        // instead of running it; the fresh pause timestamp propagates back to the winner.
+        val resolved = syncEngine.pauseOnOverwrite(local, merged, timeProvider.now())
+        if (resolved != local) {
+            timerManager.applySyncedTimerState(resolved)
         }
         stateMutex.withLock {
-            if (merged != lastPublishedTimerState) {
-                lastPublishedTimerState = merged
+            if (resolved != lastPublishedTimerState) {
+                lastPublishedTimerState = resolved
             } else {
                 return
             }
         }
-        broadcastTimerState(merged)
+        broadcastTimerState(resolved)
     }
 
     private suspend fun onSettingsInternal(remote: SyncedSettings) {

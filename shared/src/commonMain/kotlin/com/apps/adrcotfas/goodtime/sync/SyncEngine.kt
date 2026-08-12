@@ -18,7 +18,6 @@
 package com.apps.adrcotfas.goodtime.sync
 
 import com.apps.adrcotfas.goodtime.bl.TimerState
-import com.apps.adrcotfas.goodtime.bl.isActive
 import com.apps.adrcotfas.goodtime.data.model.Label
 import com.apps.adrcotfas.goodtime.data.model.Session
 import com.apps.adrcotfas.goodtime.data.model.TimerProfile
@@ -164,14 +163,15 @@ class SyncEngine(
     }
 
     /**
-     * Merges two timer states.
+     * Merges two timer states by pure last-write-wins: the later change (higher
+     * [SyncedTimerState.updatedAt]) overwrites the earlier one, no matter what the states are.
+     * Same-session transitions (a mirror echoing its leader, or the leader pausing/resuming/
+     * finishing its own session) also resolve by recency, so mirrors keep following the leader.
      *
-     * - The same session on both sides (a mirror's echo, or the leader's own transitions like
-     *   running -> finished) stays last-write-wins, so mirrors keep following the leader.
-     * - Two distinct live sessions: the one opened (started) earlier wins, so a device that
-     *   opened its session later never overrides the one that was there first.
-     * - A live session always beats an idle/reset state: a device that was just opened or reset
-     *   must not wipe a timer that is actually running on the other device.
+     * A pure LWW winner can force the losing device to start running a session it never opened
+     * (an idle device covered by a newer RUNNING state, or two devices running different
+     * sessions). Apply [pauseOnOverwrite] before applying the winner so the overwritten device
+     * pauses instead of running someone else's session.
      */
     fun mergeTimerState(
         local: SyncedTimerState?,
@@ -179,20 +179,42 @@ class SyncEngine(
     ): SyncedTimerState? {
         if (local == null) return remote
         if (remote == null) return local
-
-        val localStart = local.startTimeWallClock
-        val remoteStart = remote.startTimeWallClock
-
-        if (localStart > 0 && localStart == remoteStart) {
-            return lastWriteWins(local, remote)
-        }
-        if (local.state.isActive && remote.state.isActive) {
-            return if (localStart < remoteStart) local else remote
-        }
-        if (local.state.isActive && remoteStart == 0L) return local
-        if (remote.state.isActive && localStart == 0L) return remote
-
         return lastWriteWins(local, remote)
+    }
+
+    /**
+     * Prevents time from running away on an overwritten device. When [winner] (already resolved
+     * by [mergeTimerState]) is a RUNNING session different from the one this device currently
+     * holds - or replaces an idle/reset state - return the same session forced to PAUSED as of
+     * [now], so the countdown can't keep ticking here.
+     *
+     * The forced pause gets a fresh [SyncedTimerState.updatedAt] (never older than [winner]'s),
+     * so it propagates back to the winning device, which then pauses too: an overwrite converges
+     * on "both paused" rather than "both running".
+     *
+     * Same-session RUNNING updates (leader transitions, mirror echoes) are not overwrites and
+     * pass through unchanged.
+     */
+    fun pauseOnOverwrite(
+        local: SyncedTimerState?,
+        winner: SyncedTimerState,
+        now: Long,
+    ): SyncedTimerState {
+        if (winner.state != TimerState.RUNNING) return winner
+        if (winner.startTimeWallClock <= 0L) return winner
+        if (local != null && local.startTimeWallClock == winner.startTimeWallClock) return winner
+
+        val remainingMillisAtPause =
+            if (winner.isCountdown) {
+                (winner.endTimeWallClock - now).coerceAtLeast(0)
+            } else {
+                (now - winner.startTimeWallClock - winner.timeSpentPaused).coerceAtLeast(0)
+            }
+        return winner.copy(
+            state = TimerState.PAUSED,
+            remainingMillisAtPause = remainingMillisAtPause,
+            updatedAt = maxOf(winner.updatedAt, now),
+        )
     }
 
     private fun lastWriteWins(

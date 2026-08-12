@@ -133,6 +133,8 @@ class SyncEngineTest {
     private fun timerState(
         state: TimerState = TimerState.RUNNING,
         startTimeWallClock: Long = 0,
+        endTimeWallClock: Long = 0,
+        timeSpentPaused: Long = 0,
         updatedAt: Long = 0,
     ) = SyncedTimerState(
         state = state,
@@ -141,15 +143,17 @@ class SyncEngineTest {
         isCountdown = true,
         labelName = "label",
         startTimeWallClock = startTimeWallClock,
+        endTimeWallClock = endTimeWallClock,
+        timeSpentPaused = timeSpentPaused,
         updatedAt = updatedAt,
     )
 
     @Test
-    fun `earlier opened session wins over a later one even with a newer update`() {
+    fun `later change overwrites an earlier one even if its session was opened later`() {
         val earlier = timerState(startTimeWallClock = 1000, updatedAt = 1000)
         val later = timerState(startTimeWallClock = 2000, updatedAt = 1500)
-        assertEquals(earlier, engine.mergeTimerState(later, earlier))
-        assertEquals(earlier, engine.mergeTimerState(earlier, later))
+        assertEquals(later, engine.mergeTimerState(later, earlier))
+        assertEquals(later, engine.mergeTimerState(earlier, later))
     }
 
     @Test
@@ -168,11 +172,11 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `a live session wins over a freshly reset or opened device`() {
+    fun `a newer idle reset overwrites an older running session`() {
         val running = timerState(startTimeWallClock = 1000, updatedAt = 1000)
         val reset = timerState(state = TimerState.RESET, startTimeWallClock = 0, updatedAt = 2000)
-        assertEquals(running, engine.mergeTimerState(running, reset))
-        assertEquals(running, engine.mergeTimerState(reset, running))
+        assertEquals(reset, engine.mergeTimerState(running, reset))
+        assertEquals(reset, engine.mergeTimerState(reset, running))
     }
 
     @Test
@@ -180,5 +184,55 @@ class SyncEngineTest {
         val old = timerState(state = TimerState.RESET, updatedAt = 1000)
         val new = timerState(state = TimerState.RESET, updatedAt = 2000)
         assertEquals(new, engine.mergeTimerState(old, new))
+    }
+
+    @Test
+    fun `overwriting an idle device with a running session forces it to pause`() {
+        val running = timerState(startTimeWallClock = 1000, endTimeWallClock = 1600, updatedAt = 1000)
+        val paused =
+            engine.pauseOnOverwrite(
+                local = timerState(state = TimerState.RESET, updatedAt = 900),
+                winner = running,
+                now = 1100,
+            )
+        assertEquals(TimerState.PAUSED, paused.state)
+        assertEquals(500, paused.remainingMillisAtPause)
+        assertEquals(1100, paused.updatedAt)
+        assertEquals(1000, paused.startTimeWallClock)
+    }
+
+    @Test
+    fun `same running session is followed not paused`() {
+        val running = timerState(startTimeWallClock = 1000, updatedAt = 1500)
+        val local = timerState(startTimeWallClock = 1000, updatedAt = 1000)
+        assertEquals(running, engine.pauseOnOverwrite(local, running, now = 1600))
+    }
+
+    @Test
+    fun `only running winners are paused`() {
+        val finished = timerState(state = TimerState.FINISHED, startTimeWallClock = 1000, updatedAt = 1500)
+        val local = timerState(startTimeWallClock = 2000, updatedAt = 1000)
+        assertEquals(finished, engine.pauseOnOverwrite(local, finished, now = 1600))
+
+        val paused = timerState(state = TimerState.PAUSED, startTimeWallClock = 1000, updatedAt = 1500)
+        assertEquals(paused, engine.pauseOnOverwrite(local, paused, now = 1600))
+    }
+
+    @Test
+    fun `forced pause keeps a fresh timestamp so it propagates back to the winner`() {
+        val running = timerState(startTimeWallClock = 1000, updatedAt = 1500)
+        val paused = engine.pauseOnOverwrite(local = null, winner = running, now = 2000)
+        assertEquals(TimerState.PAUSED, paused.state)
+        assertTrue(paused.updatedAt > running.updatedAt)
+    }
+
+    @Test
+    fun `count-up focus overwrite pauses with the elapsed focus time`() {
+        val running =
+            timerState(startTimeWallClock = 1000, updatedAt = 1500)
+                .copy(isCountdown = false, timeSpentPaused = 100)
+        val paused = engine.pauseOnOverwrite(local = null, winner = running, now = 2000)
+        assertEquals(TimerState.PAUSED, paused.state)
+        assertEquals(900, paused.remainingMillisAtPause)
     }
 }
