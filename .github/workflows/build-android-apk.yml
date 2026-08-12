@@ -1,0 +1,47 @@
+name: Build Android APK
+
+# Builds unsigned (debug-signed) release APKs for both distribution flavors
+# and uploads them as artifacts. The release build falls back to the debug
+# signing config when no keystore is configured, so no secrets are required.
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [google, fdroid]
+    steps:
+      - uses: actions/checkout@v7
+
+      # The Gradle daemon must run on JDK 21 (kmp-app-version plugin requirement).
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      # gradle.properties pins org.gradle.java.home to a machine-specific path;
+      # remove it so the daemon runs on the runner JDK.
+      - name: Unpin Gradle daemon JDK
+        run: sed -i '/^org\.gradle\.java\.home=/d' gradle.properties
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build ${{ matrix.flavor }} release APK
+        run: ./gradlew :androidApp:assemble${{ matrix.flavor }}Release
+
+      - name: Upload ${{ matrix.flavor }} APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: goodtime-${{ matrix.flavor }}-release
+          path: androidApp/build/outputs/apk/${{ matrix.flavor }}/release/*.apk
+          if-no-files-found: error
