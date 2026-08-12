@@ -44,4 +44,7 @@
     <string name="settings_sync_edit_port">编辑端口</string>
     <string name="settings_sync_server_failed">同步服务器启动失败</string>
     <string name="settings_sync_local_ip">本机 IP</string>
+    <string name="main_sync_now">立即同步</string>
+    <string name="main_sync_done">已同步</string>
+    <string name="main_sync_no_connections">未连接设备</string>
 </resources>

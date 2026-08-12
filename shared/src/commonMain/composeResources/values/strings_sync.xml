@@ -44,4 +44,7 @@
     <string name="settings_sync_edit_port">Edit port</string>
     <string name="settings_sync_server_failed">Sync server failed to start</string>
     <string name="settings_sync_local_ip">This device IP</string>
+    <string name="main_sync_now">Sync now</string>
+    <string name="main_sync_done">Synced</string>
+    <string name="main_sync_no_connections">No devices connected</string>
 </resources>

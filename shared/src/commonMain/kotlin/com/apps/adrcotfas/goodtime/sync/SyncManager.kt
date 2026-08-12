@@ -274,6 +274,17 @@ class SyncManager(
     }
 
     /**
+     * Forces a snapshot exchange with every connected peer, so both sides converge even if no
+     * automatic change triggered a broadcast. Returns whether any peer was connected.
+     */
+    suspend fun syncNow(): Boolean {
+        val active = connectionMutex.withLock { connections.toList() }
+        if (active.isEmpty()) return false
+        broadcastSnapshot(buildSnapshot())
+        return true
+    }
+
+    /**
      * Called by [SyncEventListener] whenever the local timer transitions. Mirrors do not
      * announce their own transitions - only the leading device broadcasts, avoiding
      * echo loops. State of an idle device is still shared via the snapshot on connect.

@@ -37,14 +37,19 @@ import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,6 +61,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -85,12 +91,21 @@ import com.apps.adrcotfas.goodtime.platform.isFDroid
 import com.apps.adrcotfas.goodtime.settings.permissions.getPermissionsState
 import com.apps.adrcotfas.goodtime.settings.permissions.rememberAlarmPermissionRequester
 import com.apps.adrcotfas.goodtime.settings.timerstyle.InitTimerStyle
+import com.apps.adrcotfas.goodtime.sync.SyncManager
 import com.apps.adrcotfas.goodtime.ui.ConfirmationDialog
+import compose.icons.EvaIcons
+import compose.icons.evaicons.Outline
+import compose.icons.evaicons.outline.Sync
 import goodtime_productivity.shared.generated.resources.Res
 import goodtime_productivity.shared.generated.resources.main_reset_break_budget
+import goodtime_productivity.shared.generated.resources.main_sync_done
+import goodtime_productivity.shared.generated.resources.main_sync_no_connections
+import goodtime_productivity.shared.generated.resources.main_sync_now
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
@@ -106,6 +121,9 @@ fun MainScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle(TimerMainUiState())
     val mainUiState by mainViewModel.uiState.collectAsStateWithLifecycle(MainUiState())
+
+    val syncManager: SyncManager = koinInject()
+    val syncStatus by syncManager.status.collectAsStateWithLifecycle()
 
     val updateAvailable = mainUiState.isUpdateAvailable
     val wasNotificationPermissionDenied = mainUiState.wasNotificationPermissionDenied
@@ -300,6 +318,14 @@ fun MainScreen(
                             )
                         },
                     )
+                    ManualSyncButton(
+                        modifier =
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 8.dp, end = 8.dp),
+                        syncManager = syncManager,
+                        visible = syncStatus.serverRunning,
+                    )
                     if (showTutorial) {
                         TutorialScreen(
                             onClose = { viewModel.setShowTutorial(false) },
@@ -415,3 +441,68 @@ fun MainScreen(
         )
     }
 }
+
+private enum class SyncFeedback {
+    SYNCED,
+    NO_CONNECTIONS,
+}
+
+@Composable
+private fun ManualSyncButton(
+    modifier: Modifier,
+    syncManager: SyncManager,
+    visible: Boolean,
+) {
+    val scope = rememberCoroutineScope()
+    var feedback by remember { mutableStateOf<SyncFeedback?>(null) }
+    var feedbackJob by remember { mutableStateOf<Job?>(null) }
+
+    AnimatedVisibility(
+        modifier = modifier,
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut(),
+    ) {
+        Column(horizontalAlignment = Alignment.End) {
+            IconButton(
+                modifier = Modifier.alpha(0.5f),
+                onClick = {
+                    feedbackJob?.cancel()
+                    feedbackJob =
+                        scope.launch {
+                            val synced = syncManager.syncNow()
+                            feedback =
+                                if (synced) {
+                                    SyncFeedback.SYNCED
+                                } else {
+                                    SyncFeedback.NO_CONNECTIONS
+                                }
+                            delay(SYNC_FEEDBACK_DURATION_MS)
+                            feedback = null
+                        }
+                },
+            ) {
+                Icon(
+                    imageVector = EvaIcons.Outline.Sync,
+                    contentDescription = stringResource(Res.string.main_sync_now),
+                )
+            }
+            AnimatedVisibility(visible = feedback != null, enter = fadeIn(), exit = fadeOut()) {
+                Text(
+                    text =
+                    when (feedback) {
+                        SyncFeedback.SYNCED -> stringResource(Res.string.main_sync_done)
+                        SyncFeedback.NO_CONNECTIONS ->
+                            stringResource(Res.string.main_sync_no_connections)
+                        null -> ""
+                    },
+                    modifier = Modifier.padding(end = 16.dp, bottom = 4.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
+            }
+        }
+    }
+}
+
+private const val SYNC_FEEDBACK_DURATION_MS = 1500L
