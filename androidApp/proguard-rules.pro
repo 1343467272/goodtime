@@ -31,3 +31,10 @@
 -dontwarn javax.naming.**
 -dontwarn org.ietf.jgss.**
 -dontwarn org.apache.http.**
+
+# ===== Ktor =====
+# io.ktor.util.debug.IntellijIdeaDebugDetector references JVM-only
+# java.lang.management classes that do not exist on Android
+-dontwarn java.lang.management.ManagementFactory
+-dontwarn java.lang.management.RuntimeMXBean
+-dontwarn io.ktor.util.debug.IntellijIdeaDebugDetector
