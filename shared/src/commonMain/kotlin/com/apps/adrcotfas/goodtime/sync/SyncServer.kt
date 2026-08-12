@@ -26,6 +26,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.WebSocketSession
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -56,7 +57,9 @@ class SyncServer(
         val exceptionHandler =
             CoroutineExceptionHandler { _, throwable ->
                 log.e { "sync server coroutine failed: $throwable" }
-                onStatus(throwable.message ?: "sync server failed")
+                if (throwable !is CancellationException) {
+                    onStatus(rootFailure(throwable).message ?: "sync server failed")
+                }
             }
         val newServer =
             coroutineScope.embeddedServer(
@@ -75,8 +78,15 @@ class SyncServer(
         server = newServer
         coroutineScope.launch {
             runCatching { newServer.start(wait = false) }.onFailure {
-                log.e { "sync server failed to start on port $port: $it" }
-                onStatus(it.message ?: "sync server failed to start")
+                val root = rootFailure(it)
+                if (root is CancellationException) {
+                    // The start job was cancelled (engine stopped or parent scope cancelled)
+                    // rather than failing to bind; this is not a startup failure.
+                    log.i { "sync server start cancelled on port $port: $it" }
+                } else {
+                    log.e { "sync server failed to start on port $port: $root" }
+                    onStatus(root.message ?: "sync server failed to start")
+                }
             }
         }
         log.i { "sync server listening on port $port" }
@@ -86,6 +96,22 @@ class SyncServer(
         server?.let { active ->
             server = null
             runCatching { active.stop(1000, 5000) }
+        }
+    }
+
+    /**
+     * Returns the deepest cause in [throwable]'s cause chain. The engine wraps the real failure
+     * (e.g. "Address already in use") in a [CancellationException] whose message is only a
+     * coroutine diagnostic ("<job class> is cancelling"), so it must be unwrapped before the
+     * error is shown to the user.
+     */
+    private fun rootFailure(throwable: Throwable): Throwable {
+        var current = throwable
+        val seen = mutableSetOf<Throwable>()
+        while (true) {
+            val cause = current.cause
+            if (cause == null || !seen.add(cause)) return current
+            current = cause
         }
     }
 }

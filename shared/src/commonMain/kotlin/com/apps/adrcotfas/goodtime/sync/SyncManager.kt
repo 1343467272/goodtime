@@ -60,6 +60,7 @@ class SyncManager(
     private val coroutineScope: CoroutineScope,
     private val log: Logger,
 ) {
+    private val lifecycleMutex = Mutex()
     private val connectionMutex = Mutex()
     private val connections = mutableListOf<SyncPeerConnection>()
 
@@ -80,7 +81,13 @@ class SyncManager(
     private var settingsJob: Job? = null
 
     suspend fun ensureStarted() {
-        if (collectJob != null) return
+        lifecycleMutex.withLock {
+            if (collectJob != null) return@withLock
+            startInternal()
+        }
+    }
+
+    private suspend fun startInternal() {
         val syncSettings = settingsRepo.settings.first().syncSettings
         if (!syncSettings.enabled) return
 
@@ -141,26 +148,28 @@ class SyncManager(
     }
 
     suspend fun stop() {
-        collectJob?.cancel()
-        collectJob = null
-        settingsJob?.cancel()
-        settingsJob = null
-        server?.stop()
-        server = null
-        discoveryJob?.cancel()
-        discoveryJob = null
-        discovery?.stop()
-        discovery = null
-        _discoveredPeers.value = emptyList()
-        connectionMutex.withLock {
-            connections.toList().forEach { it.close() }
-            connections.clear()
+        lifecycleMutex.withLock {
+            collectJob?.cancel()
+            collectJob = null
+            settingsJob?.cancel()
+            settingsJob = null
+            server?.stop()
+            server = null
+            discoveryJob?.cancel()
+            discoveryJob = null
+            discovery?.stop()
+            discovery = null
+            _discoveredPeers.value = emptyList()
+            connectionMutex.withLock {
+                connections.toList().forEach { it.close() }
+                connections.clear()
+            }
+            stateMutex.withLock {
+                lastPublishedSnapshot = null
+                lastPublishedTimerState = null
+            }
+            _status.update { it.copy(serverRunning = false, serverError = null, connectedPeers = 0, peers = emptyList()) }
         }
-        stateMutex.withLock {
-            lastPublishedSnapshot = null
-            lastPublishedTimerState = null
-        }
-        _status.update { it.copy(serverRunning = false, serverError = null, connectedPeers = 0, peers = emptyList()) }
     }
 
     /**
