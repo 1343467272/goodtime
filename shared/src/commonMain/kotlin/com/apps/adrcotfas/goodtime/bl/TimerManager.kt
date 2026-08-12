@@ -741,7 +741,7 @@ class TimerManager(
             remainingMillisAtPause = runtime.timeAtPause,
             endTimeWallClock = if (runtime.endTime > 0) now - elapsedRealtime + runtime.endTime else 0,
             startTimeWallClock =
-            if (!isCountdown && type.isFocus && runtime.startTime > 0) {
+            if (runtime.startTime > 0) {
                 now - elapsedRealtime + runtime.startTime
             } else {
                 0
@@ -771,10 +771,10 @@ class TimerManager(
         val now = timeProvider.now()
         val offset = now - elapsedRealtime
 
-        // For count-up focus the session's wall-clock start is synced so the mirror can
-        // reconstruct the actual elapsed focus time (instead of the time it applied the state).
+        // The session's wall-clock start is synced so the mirror can reconstruct the actual
+        // elapsed focus time and so the "earlier session wins" merge can compare starts.
         val sessionStart =
-            if (!state.isCountdown && state.type.isFocus && state.startTimeWallClock > 0) {
+            if (state.startTimeWallClock > 0) {
                 state.startTimeWallClock - offset
             } else {
                 0

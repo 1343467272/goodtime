@@ -1122,6 +1122,30 @@ class TimerManagerTest {
         )
     }
 
+    @Test
+    fun `Countdown focus round trip through sync preserves the session start`() = runTest {
+        // A device booted at wall clock 1_000_000_000 starts a countdown session.
+        timeProvider.wallClock = 1_000_000_000L
+        timeProvider.elapsedRealtime = 0L
+        timerManager.start(TimerType.FOCUS)
+        timeProvider.elapsedRealtime += 10.minutes.inWholeMilliseconds
+        testScope.advanceTimeBy(10.minutes)
+
+        val synced = timerManager.toSyncedTimerState()!!
+        assertEquals(
+            1_000_000_000L,
+            synced.startTimeWallClock,
+            "the session start must be synced for countdown timers too",
+        )
+
+        timerManager.applySyncedTimerState(synced)
+        assertEquals(
+            1_000_000_000L,
+            timerManager.toSyncedTimerState()!!.startTimeWallClock,
+            "the round trip must keep the same session start",
+        )
+    }
+
     companion object {
         private const val CUSTOM_LABEL_NAME = "dummy"
         private val dummyTimerProfile =

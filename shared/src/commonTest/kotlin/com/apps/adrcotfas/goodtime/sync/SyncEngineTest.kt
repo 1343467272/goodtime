@@ -17,6 +17,8 @@
  */
 package com.apps.adrcotfas.goodtime.sync
 
+import com.apps.adrcotfas.goodtime.bl.TimerState
+import com.apps.adrcotfas.goodtime.bl.TimerType
 import com.apps.adrcotfas.goodtime.data.model.Session
 import com.apps.adrcotfas.goodtime.data.settings.AppSettings
 import com.apps.adrcotfas.goodtime.data.settings.SyncedSettings
@@ -126,5 +128,57 @@ class SyncEngineTest {
         assertEquals(0f, synced.timerStyle.currentScreenWidth)
         assertEquals(3, synced.timerStyle.colorIndex)
         assertEquals(700, synced.timerStyle.fontWeight)
+    }
+
+    private fun timerState(
+        state: TimerState = TimerState.RUNNING,
+        startTimeWallClock: Long = 0,
+        updatedAt: Long = 0,
+    ) = SyncedTimerState(
+        state = state,
+        type = TimerType.FOCUS,
+        isFocus = true,
+        isCountdown = true,
+        labelName = "label",
+        startTimeWallClock = startTimeWallClock,
+        updatedAt = updatedAt,
+    )
+
+    @Test
+    fun `earlier opened session wins over a later one even with a newer update`() {
+        val earlier = timerState(startTimeWallClock = 1000, updatedAt = 1000)
+        val later = timerState(startTimeWallClock = 2000, updatedAt = 1500)
+        assertEquals(earlier, engine.mergeTimerState(later, earlier))
+        assertEquals(earlier, engine.mergeTimerState(earlier, later))
+    }
+
+    @Test
+    fun `sessions opened at the same time fall back to last write wins`() {
+        val old = timerState(startTimeWallClock = 1000, updatedAt = 1000)
+        val new = timerState(startTimeWallClock = 1000, updatedAt = 2000)
+        assertEquals(new, engine.mergeTimerState(old, new))
+    }
+
+    @Test
+    fun `leader finishing the same session is followed by the mirror`() {
+        val running = timerState(startTimeWallClock = 1000, updatedAt = 1000)
+        val finished =
+            timerState(state = TimerState.FINISHED, startTimeWallClock = 1000, updatedAt = 2000)
+        assertEquals(finished, engine.mergeTimerState(running, finished))
+    }
+
+    @Test
+    fun `a live session wins over a freshly reset or opened device`() {
+        val running = timerState(startTimeWallClock = 1000, updatedAt = 1000)
+        val reset = timerState(state = TimerState.RESET, startTimeWallClock = 0, updatedAt = 2000)
+        assertEquals(running, engine.mergeTimerState(running, reset))
+        assertEquals(running, engine.mergeTimerState(reset, running))
+    }
+
+    @Test
+    fun `idle states fall back to last write wins`() {
+        val old = timerState(state = TimerState.RESET, updatedAt = 1000)
+        val new = timerState(state = TimerState.RESET, updatedAt = 2000)
+        assertEquals(new, engine.mergeTimerState(old, new))
     }
 }

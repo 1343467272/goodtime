@@ -17,6 +17,8 @@
  */
 package com.apps.adrcotfas.goodtime.sync
 
+import com.apps.adrcotfas.goodtime.bl.TimerState
+import com.apps.adrcotfas.goodtime.bl.isActive
 import com.apps.adrcotfas.goodtime.data.model.Label
 import com.apps.adrcotfas.goodtime.data.model.Session
 import com.apps.adrcotfas.goodtime.data.model.TimerProfile
@@ -161,12 +163,42 @@ class SyncEngine(
         return if (remoteJson > localJson) remote else local
     }
 
+    /**
+     * Merges two timer states.
+     *
+     * - The same session on both sides (a mirror's echo, or the leader's own transitions like
+     *   running -> finished) stays last-write-wins, so mirrors keep following the leader.
+     * - Two distinct live sessions: the one opened (started) earlier wins, so a device that
+     *   opened its session later never overrides the one that was there first.
+     * - A live session always beats an idle/reset state: a device that was just opened or reset
+     *   must not wipe a timer that is actually running on the other device.
+     */
     fun mergeTimerState(
         local: SyncedTimerState?,
         remote: SyncedTimerState?,
     ): SyncedTimerState? {
         if (local == null) return remote
         if (remote == null) return local
+
+        val localStart = local.startTimeWallClock
+        val remoteStart = remote.startTimeWallClock
+
+        if (localStart > 0 && localStart == remoteStart) {
+            return lastWriteWins(local, remote)
+        }
+        if (local.state.isActive && remote.state.isActive) {
+            return if (localStart < remoteStart) local else remote
+        }
+        if (local.state.isActive && remoteStart == 0L) return local
+        if (remote.state.isActive && localStart == 0L) return remote
+
+        return lastWriteWins(local, remote)
+    }
+
+    private fun lastWriteWins(
+        local: SyncedTimerState,
+        remote: SyncedTimerState,
+    ): SyncedTimerState {
         if (remote.updatedAt > local.updatedAt) return remote
         if (remote.updatedAt < local.updatedAt) return local
         return if (remote.labelName > local.labelName) remote else local
