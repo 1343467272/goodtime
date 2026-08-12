@@ -41,6 +41,8 @@ class SyncServer(
     private val port: Int,
     private val connectionFactory: suspend (WebSocketSession, String) -> SyncPeerConnection,
     private val log: Logger,
+    /** Called with a message when the listen socket fails to bind/start, so the UI can report it. */
+    private val onStatus: (String?) -> Unit = {},
 ) {
     private var server: EmbeddedServer<*, *>? = null
 
@@ -54,6 +56,7 @@ class SyncServer(
         val exceptionHandler =
             CoroutineExceptionHandler { _, throwable ->
                 log.e { "sync server coroutine failed: $throwable" }
+                onStatus(throwable.message ?: "sync server failed")
             }
         val newServer =
             coroutineScope.embeddedServer(
@@ -73,6 +76,7 @@ class SyncServer(
         coroutineScope.launch {
             runCatching { newServer.start(wait = false) }.onFailure {
                 log.e { "sync server failed to start on port $port: $it" }
+                onStatus(it.message ?: "sync server failed to start")
             }
         }
         log.i { "sync server listening on port $port" }

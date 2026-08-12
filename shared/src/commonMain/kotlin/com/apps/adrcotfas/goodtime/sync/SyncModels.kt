@@ -53,6 +53,8 @@ data class SyncPeerInfo(
 /** Runtime diagnostics surfaced to the sync settings screen. */
 data class SyncStatus(
     val serverRunning: Boolean = false,
+    /** Why the local sync server failed to bind/listen, if it did. */
+    val serverError: String? = null,
     val connectedPeers: Int = 0,
     /** Epoch millis of the last successful peer exchange. */
     val lastSyncTimestamp: Long = 0L,

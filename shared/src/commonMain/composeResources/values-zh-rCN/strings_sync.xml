@@ -42,4 +42,6 @@
     <string name="settings_sync_never_synced">尚未同步</string>
     <string name="settings_sync_edit_name">编辑设备名称</string>
     <string name="settings_sync_edit_port">编辑端口</string>
+    <string name="settings_sync_server_failed">同步服务器启动失败</string>
+    <string name="settings_sync_local_ip">本机 IP</string>
 </resources>

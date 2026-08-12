@@ -70,10 +70,12 @@ import goodtime_productivity.shared.generated.resources.settings_sync_edit_port
 import goodtime_productivity.shared.generated.resources.settings_sync_enable_desc
 import goodtime_productivity.shared.generated.resources.settings_sync_enable_title
 import goodtime_productivity.shared.generated.resources.settings_sync_last_sync
+import goodtime_productivity.shared.generated.resources.settings_sync_local_ip
 import goodtime_productivity.shared.generated.resources.settings_sync_never_synced
 import goodtime_productivity.shared.generated.resources.settings_sync_port
 import goodtime_productivity.shared.generated.resources.settings_sync_port_desc
 import goodtime_productivity.shared.generated.resources.settings_sync_server_running
+import goodtime_productivity.shared.generated.resources.settings_sync_server_failed
 import goodtime_productivity.shared.generated.resources.settings_sync_server_starting
 import goodtime_productivity.shared.generated.resources.settings_sync_status
 import org.jetbrains.compose.resources.stringResource
@@ -128,6 +130,37 @@ fun SyncScreen(onNavigateBack: () -> Boolean) {
                     BetterListItem(
                         title = stringResource(Res.string.settings_sync_server_starting),
                     )
+                }
+                val serverError = uiState.serverError
+                if (serverError != null) {
+                    Text(
+                        modifier =
+                        Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp),
+                        text = stringResource(Res.string.settings_sync_server_failed),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        modifier =
+                        Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp),
+                        text = serverError,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (uiState.localIps.isNotEmpty()) {
+                    BetterListItem(
+                        title = stringResource(Res.string.settings_sync_local_ip),
+                    )
+                    uiState.localIps.forEach { ip ->
+                        BetterListItem(
+                            title = ip,
+                        )
+                    }
                 }
                 BetterListItem(
                     title = stringResource(Res.string.settings_sync_connected_devices, uiState.connectedPeers),

@@ -91,6 +91,7 @@ class SyncManager(
                 }
             }
         server?.stop()
+        _status.update { it.copy(serverError = null) }
         server =
             SyncServer(
                 coroutineScope = coroutineScope,
@@ -98,6 +99,11 @@ class SyncManager(
                 port = syncSettings.port,
                 connectionFactory = ::createConnection,
                 log = log,
+                onStatus = { error ->
+                    if (error != null) {
+                        _status.update { it.copy(serverError = error, serverRunning = false) }
+                    }
+                },
             ).also { it.start() }
         startDiscovery()
         startCollectors()
@@ -154,7 +160,7 @@ class SyncManager(
             lastPublishedSnapshot = null
             lastPublishedTimerState = null
         }
-        _status.update { it.copy(serverRunning = false, connectedPeers = 0, peers = emptyList()) }
+        _status.update { it.copy(serverRunning = false, serverError = null, connectedPeers = 0, peers = emptyList()) }
     }
 
     /**

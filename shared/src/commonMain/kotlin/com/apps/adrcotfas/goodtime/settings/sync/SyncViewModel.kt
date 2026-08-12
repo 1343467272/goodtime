@@ -25,6 +25,7 @@ import com.apps.adrcotfas.goodtime.data.settings.SyncSettings
 import com.apps.adrcotfas.goodtime.sync.DiscoveredPeer
 import com.apps.adrcotfas.goodtime.sync.SyncManager
 import com.apps.adrcotfas.goodtime.sync.SyncPeerInfo
+import com.apps.adrcotfas.goodtime.sync.getLocalIpAddresses
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -42,6 +43,8 @@ data class SyncUiState(
     val isLoading: Boolean = true,
     val syncSettings: SyncSettings = SyncSettings(),
     val serverRunning: Boolean = false,
+    val serverError: String? = null,
+    val localIps: List<String> = emptyList(),
     val connectedPeers: Int = 0,
     val lastSyncTimestamp: Long = 0L,
     val lastSyncLabel: String? = null,
@@ -77,6 +80,8 @@ class SyncViewModel(
                             isLoading = false,
                             syncSettings = syncSettings,
                             serverRunning = status.serverRunning,
+                            serverError = status.serverError,
+                            localIps = getLocalIpAddresses(),
                             connectedPeers = status.connectedPeers,
                             lastSyncTimestamp = status.lastSyncTimestamp,
                             lastSyncLabel = status.lastSyncTimestamp.formatSyncTime(timeFormatProvider),
