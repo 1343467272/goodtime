@@ -33,8 +33,10 @@
 -dontwarn org.apache.http.**
 
 # ===== Ktor =====
-# io.ktor.util.debug.IntellijIdeaDebugDetector references JVM-only
-# java.lang.management classes that do not exist on Android
--dontwarn java.lang.management.ManagementFactory
--dontwarn java.lang.management.RuntimeMXBean
--dontwarn io.ktor.util.debug.IntellijIdeaDebugDetector
+# io.ktor.util.debug.IntellijIdeaDebugDetector.isDebuggerConnected() is backed
+# by a lazy initializer that calls JVM-only java.lang.management classes that
+# do not exist on Android. -dontwarn is not enough (AGP treats missing classes
+# as errors); folding the getter to false lets R8 remove that code entirely.
+-assumevalues class io.ktor.util.debug.IntellijIdeaDebugDetector {
+    boolean isDebuggerConnected() return false;
+}
