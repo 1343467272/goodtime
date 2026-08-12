@@ -132,6 +132,7 @@ actual val platformModule: Module =
                 get<SoundVibrationAndTorchPlayer>(),
                 get<TimerStatePersistenceListener>(),
                 get<DesktopNotifications>(),
+                get<EventListener>(),
             )
         }
 

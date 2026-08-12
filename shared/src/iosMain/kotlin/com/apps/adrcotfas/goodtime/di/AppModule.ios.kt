@@ -189,6 +189,7 @@ actual val platformModule: Module =
                 get<IosLiveActivityListener>(),
                 get<SoundVibrationAndTorchPlayer>(),
                 get<TimerStatePersistenceListener>(),
+                get<EventListener>(),
             )
         }
 

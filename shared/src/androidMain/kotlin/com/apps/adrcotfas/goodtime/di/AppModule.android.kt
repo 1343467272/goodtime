@@ -123,6 +123,7 @@ actual val platformModule: Module =
                 get<FinishedNotificationHandler>(),
                 get<SoundVibrationAndTorchPlayer>(),
                 get<TimerStatePersistenceListener>(),
+                get<EventListener>(),
             )
         }
         single<UrlOpener> { AndroidUrlOpener(get()) }
