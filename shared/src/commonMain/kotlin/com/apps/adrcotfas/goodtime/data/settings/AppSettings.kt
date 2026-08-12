@@ -165,6 +165,21 @@ data class BackupSettings(
 )
 
 /**
+ * A device this device has paired with. Like Bluetooth pairings, a paired device is
+ * reconnected automatically in the background whenever sync is enabled, without the
+ * user having to connect by hand again.
+ */
+@Serializable
+data class PairedPeer(
+    val deviceId: String,
+    val deviceName: String,
+    /** Last known address of the peer's sync server. */
+    val host: String,
+    /** Port of the peer's sync server; 0 falls back to this device's configured port. */
+    val port: Int = 0,
+)
+
+/**
  * Configuration of the LAN (local network) sync feature. Not itself synced across devices.
  */
 @Serializable
@@ -179,10 +194,11 @@ data class SyncSettings(
     /** Epoch millis of the last successful sync, used for diagnostics/UI. */
     val lastSyncTimestamp: Long = 0L,
     /**
-     * Hosts of peers this device connected to (outbound). They are reconnected automatically
-     * when sync starts, so a previously paired device does not need to be re-selected by hand.
+     * Devices this device has paired with. While the app is running and sync is enabled, it
+     * automatically searches for paired devices and connects to the first one it finds; only
+     * the sync settings screen searches for unpaired devices.
      */
-    val peerHosts: List<String> = emptyList(),
+    val pairedPeers: List<PairedPeer> = emptyList(),
 ) {
     companion object {
         const val DEFAULT_PORT = 46371

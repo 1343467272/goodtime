@@ -22,20 +22,24 @@ import com.apps.adrcotfas.goodtime.bl.TimeProvider
 import com.apps.adrcotfas.goodtime.bl.TimerManager
 import com.apps.adrcotfas.goodtime.bl.generateUuid
 import com.apps.adrcotfas.goodtime.data.local.LocalDataRepository
+import com.apps.adrcotfas.goodtime.data.settings.PairedPeer
 import com.apps.adrcotfas.goodtime.data.settings.SettingsRepository
 import com.apps.adrcotfas.goodtime.data.settings.SyncedSettings
 import io.ktor.websocket.WebSocketSession
 import io.ktor.websocket.close
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -75,9 +79,20 @@ class SyncManager(
     private val _discoveredPeers = MutableStateFlow<List<DiscoveredPeer>>(emptyList())
     val discoveredPeers: StateFlow<List<DiscoveredPeer>> = _discoveredPeers.asStateFlow()
 
+    /**
+     * Whether the sync settings screen is open. Unpaired devices are only searched for while it
+     * is; in the background the app only reconnects to already paired devices.
+     */
+    private val _syncScreenVisible = MutableStateFlow(false)
+    val syncScreenVisible: StateFlow<Boolean> = _syncScreenVisible.asStateFlow()
+
+    /** Hosts with an outbound connect attempt in flight, to avoid duplicate concurrent attempts. */
+    private val connectingHosts = mutableSetOf<String>()
+
     private var server: SyncServer? = null
     private var discovery: DiscoveryManager? = null
     private var discoveryJob: Job? = null
+    private var searchJob: Job? = null
     private var collectJob: Job? = null
     private var settingsJob: Job? = null
 
@@ -115,7 +130,7 @@ class SyncManager(
             ).also { it.start() }
         startDiscovery()
         startCollectors()
-        startAutoReconnect()
+        startPeriodicSearch()
         _status.update { it.copy(serverRunning = true) }
         log.i { "sync started, deviceId=$deviceId" }
     }
@@ -125,6 +140,8 @@ class SyncManager(
         discovery = null
         discoveryJob?.cancel()
         discoveryJob = null
+        searchJob?.cancel()
+        searchJob = null
         val ownDeviceId = settingsRepo.settings.first().syncSettings.deviceId
         val manager =
             DiscoveryManager(
@@ -136,21 +153,95 @@ class SyncManager(
         discovery = manager
         discoveryJob =
             coroutineScope.launch {
-                manager.discoveredPeers.collect { _discoveredPeers.value = it }
+                manager.start(
+                    ownDeviceId = { ownDeviceId },
+                    announcement = {
+                        val s = settingsRepo.settings.first().syncSettings
+                        DiscoveryAnnouncement(deviceId = s.deviceId, deviceName = s.serverName, port = s.port)
+                    },
+                )
+                updateSearchState()
+                runSearchCoordinator(manager)
             }
-        coroutineScope.launch {
-            manager.start(
-                ownDeviceId = { ownDeviceId },
-                announcement = {
-                    val s = settingsRepo.settings.first().syncSettings
-                    DiscoveryAnnouncement(deviceId = s.deviceId, deviceName = s.serverName, port = s.port)
-                },
-            )
+    }
+
+    /**
+     * While searching, keeps trying paired peers by their last known address. This is the
+     * fallback when discovery does not see a peer (e.g. its announcement is dropped); the
+     * discovery-driven path handles the common case, including changed addresses.
+     */
+    private suspend fun startPeriodicSearch() {
+        searchJob =
+            coroutineScope.launch {
+                while (coroutineContext.isActive) {
+                    if (shouldSearch()) {
+                        tryConnectPairedHosts()
+                    }
+                    delay(SEARCH_INTERVAL_MS)
+                }
+            }
+    }
+
+    /**
+     * Surfaces unpaired devices to the UI only while the sync settings screen is open, and
+     * auto-connects to discovered peers that are already paired (searching for paired devices).
+     * Once one paired device is connected and the settings screen is closed, searching stops.
+     */
+    private suspend fun runSearchCoordinator(manager: DiscoveryManager) {
+        manager.discoveredPeers.collect { peers ->
+            val pairedIds = pairedDeviceIds()
+            if (_syncScreenVisible.value) {
+                _discoveredPeers.value = peers.filterNot { it.deviceId in pairedIds }
+            }
+            if (shouldSearch()) {
+                peers.filter { it.deviceId in pairedIds }.forEach { peer ->
+                    coroutineScope.launch {
+                        connectTo(peer.host, peer.port, reportError = false)
+                    }
+                }
+            }
         }
     }
 
+    /** Whether to keep searching: always on the sync screen, otherwise until one device is connected. */
+    private suspend fun shouldSearch(): Boolean {
+        if (_syncScreenVisible.value) return true
+        return connectionMutex.withLock { connections.isEmpty() }
+    }
+
+    private suspend fun updateSearchState() {
+        val searching = shouldSearch()
+        discovery?.setSearching(searching)
+        if (!searching) {
+            _discoveredPeers.value = emptyList()
+        }
+    }
+
+    /** Called by the UI when the sync settings screen is opened or closed. */
+    fun setSyncScreenVisible(visible: Boolean) {
+        _syncScreenVisible.value = visible
+        coroutineScope.launch { updateSearchState() }
+    }
+
+    private suspend fun tryConnectPairedHosts() {
+        val settings = settingsRepo.settings.first().syncSettings
+        val localIps = getLocalIpAddresses().toSet()
+        val connectedHosts = connectionMutex.withLock { connections.map { it.host }.toSet() }
+        settings.pairedPeers
+            .filterNot { it.host in connectedHosts || it.host in localIps }
+            .forEach { peer ->
+                coroutineScope.launch {
+                    connectTo(peer.host, peer.port.takeIf { it > 0 }, reportError = false)
+                }
+            }
+    }
+
+    private suspend fun pairedDeviceIds(): Set<String> =
+        settingsRepo.settings.first().syncSettings.pairedPeers.map { it.deviceId }.toSet()
+
     suspend fun stop() {
         lifecycleMutex.withLock {
+            _syncScreenVisible.value = false
             collectJob?.cancel()
             collectJob = null
             settingsJob?.cancel()
@@ -159,6 +250,8 @@ class SyncManager(
             server = null
             discoveryJob?.cancel()
             discoveryJob = null
+            searchJob?.cancel()
+            searchJob = null
             discovery?.stop()
             discovery = null
             _discoveredPeers.value = emptyList()
@@ -183,90 +276,110 @@ class SyncManager(
      * silently and only log)
      */
     suspend fun connectTo(host: String, port: Int? = null, reportError: Boolean = true): Boolean {
-        if (connectionMutex.withLock { connections.any { it.host == host } }) {
-            log.i { "already connected to $host" }
-            return true
-        }
-        if (reportError) {
-            _status.update { it.copy(connectingTo = host, lastConnectError = null) }
-        }
-        val result =
-            try {
-                withTimeout(CONNECT_TIMEOUT_MS) {
-                    val effectivePort = port ?: settingsRepo.settings.first().syncSettings.port
-                    SyncClient(
-                        host = host,
-                        port = effectivePort,
-                        json = json,
-                        connectionFactory = ::createConnection,
-                        coroutineScope = coroutineScope,
-                        log = log,
-                    ).connect()
+        val acquired =
+            connectionMutex.withLock {
+                if (host in connectingHosts) {
+                    false
+                } else {
+                    connectingHosts.add(host)
+                    true
                 }
-            } catch (e: TimeoutCancellationException) {
-                log.e { "connect to $host timed out" }
-                if (reportError) {
-                    _status.update {
-                        it.copy(
-                            connectingTo = null,
-                            lastConnectError = e.message ?: "Connection timed out",
-                        )
-                    }
-                }
-                return false
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                log.e { "connect to $host failed: $e" }
-                if (reportError) {
-                    _status.update {
-                        it.copy(
-                            connectingTo = null,
-                            lastConnectError = e.message ?: "Connection failed",
-                        )
-                    }
-                }
-                return false
             }
-        if (reportError) {
-            _status.update { it.copy(connectingTo = null) }
+        if (!acquired) {
+            log.i { "already connecting to $host, skipping" }
+            return false
         }
-        if (result) {
-            log.i { "connected to $host" }
-            rememberPeer(host)
-        } else if (reportError) {
-            _status.update { it.copy(lastConnectError = "Connection failed") }
+        try {
+            if (connectionMutex.withLock { connections.any { it.host == host } }) {
+                log.i { "already connected to $host" }
+                return true
+            }
+            if (reportError) {
+                _status.update { it.copy(connectingTo = host, lastConnectError = null) }
+            }
+            val result =
+                try {
+                    withTimeout(CONNECT_TIMEOUT_MS) {
+                        val effectivePort = port ?: settingsRepo.settings.first().syncSettings.port
+                        SyncClient(
+                            host = host,
+                            port = effectivePort,
+                            json = json,
+                            connectionFactory = ::createConnection,
+                            coroutineScope = coroutineScope,
+                            log = log,
+                        ).connect()
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    log.e { "connect to $host timed out" }
+                    if (reportError) {
+                        _status.update {
+                            it.copy(
+                                connectingTo = null,
+                                lastConnectError = e.message ?: "Connection timed out",
+                            )
+                        }
+                    }
+                    return false
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    log.e { "connect to $host failed: $e" }
+                    if (reportError) {
+                        _status.update {
+                            it.copy(
+                                connectingTo = null,
+                                lastConnectError = e.message ?: "Connection failed",
+                            )
+                        }
+                    }
+                    return false
+                }
+            if (reportError) {
+                _status.update { it.copy(connectingTo = null) }
+            }
+            if (result) {
+                log.i { "connected to $host" }
+            } else if (reportError) {
+                _status.update { it.copy(lastConnectError = "Connection failed") }
+            }
+            updateSearchState()
+            return result
+        } finally {
+            connectionMutex.withLock { connectingHosts.remove(host) }
         }
-        return result
     }
 
     /**
-     * Remembers a peer we connected to so it can be reconnected automatically next time
-     * sync starts. Most recently used hosts come first; the list is capped.
+     * Records a successful pairing. The peer is then reconnected automatically whenever sync
+     * runs, without the user having to connect by hand again. The most recently used peers
+     * come first; the list is capped.
      */
-    private suspend fun rememberPeer(host: String) {
+    private suspend fun rememberPeer(peer: PairedPeer) {
         val current = settingsRepo.settings.first().syncSettings
-        val updated = (listOf(host) + current.peerHosts.filterNot { it == host }).take(MAX_SAVED_PEERS)
-        if (updated != current.peerHosts) {
-            settingsRepo.setSyncSettings(current.copy(peerHosts = updated))
+        val updated =
+            (listOf(peer) + current.pairedPeers.filterNot { it.deviceId == peer.deviceId })
+                .take(MAX_SAVED_PEERS)
+        if (updated != current.pairedPeers) {
+            settingsRepo.setSyncSettings(current.copy(pairedPeers = updated))
         }
     }
 
     /**
-     * Reconnects to the peers this device has connected to before, silently. Skips hosts we
-     * are already connected to (e.g. the peer connected to us first) and our own addresses.
+     * Forgets a pairing (like Bluetooth "forget"). The peer stays connected until it
+     * disconnects, but it will no longer be auto-reconnected or listed as paired.
      */
-    private suspend fun startAutoReconnect() {
-        val settings = settingsRepo.settings.first().syncSettings
-        val localIps = getLocalIpAddresses().toSet()
-        val connectedHosts = connectionMutex.withLock { connections.map { it.host }.toSet() }
-        settings.peerHosts
-            .filterNot { it in connectedHosts || it in localIps }
-            .forEach { host ->
-                coroutineScope.launch {
-                    connectTo(host, reportError = false)
-                }
+    suspend fun forgetPeer(deviceId: String) {
+        val current = settingsRepo.settings.first().syncSettings
+        val updated = current.pairedPeers.filterNot { it.deviceId == deviceId }
+        if (updated != current.pairedPeers) {
+            settingsRepo.setSyncSettings(current.copy(pairedPeers = updated))
+        }
+        connectionMutex.withLock {
+            connections.filter { it.peerDeviceId == deviceId }.forEach { conn ->
+                coroutineScope.launch { conn.close() }
             }
+        }
     }
 
     fun clearConnectError() {
@@ -320,7 +433,18 @@ class SyncManager(
                             host = host,
                             deviceId = syncSettings.deviceId,
                             serverName = syncSettings.serverName,
-                            onHello = { _, _ -> updatePeersStatus() },
+                            localPort = syncSettings.port,
+                            onHello = { conn, hello ->
+                                rememberPeer(
+                                    PairedPeer(
+                                        deviceId = conn.peerDeviceId,
+                                        deviceName = conn.peerDeviceName,
+                                        host = conn.host,
+                                        port = hello.port,
+                                    ),
+                                )
+                                updatePeersStatus()
+                            },
                             onSnapshot = ::onSnapshotInternal,
                             onTimerState = ::onTimerStateInternal,
                             onSettings = ::onSettingsInternal,
@@ -364,6 +488,7 @@ class SyncManager(
     private suspend fun removeConnection(connection: SyncPeerConnection) {
         connectionMutex.withLock { connections.remove(connection) }
         log.i { "sync peer disconnected" }
+        updateSearchState()
     }
 
     private suspend fun buildSnapshot(): SnapshotPayload {
@@ -520,5 +645,7 @@ class SyncManager(
     companion object {
         private const val CONNECT_TIMEOUT_MS = 10_000L
         private const val MAX_SAVED_PEERS = 8
+        /** How often the fallback reconnect-by-address loop retries paired devices. */
+        private const val SEARCH_INTERVAL_MS = 15_000L
     }
 }

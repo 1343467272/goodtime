@@ -36,6 +36,10 @@
     <string name="settings_sync_connect_button">Connect</string>
     <string name="settings_sync_connecting">Connecting…</string>
     <string name="settings_sync_connect_failed">Connection failed. Check the IP, the port and that both devices are on the same network, or connect to a discovered device.</string>
+    <string name="settings_sync_paired_title">Paired devices</string>
+    <string name="settings_sync_paired_empty">No paired devices yet. Pair one from the nearby devices list.</string>
+    <string name="settings_sync_forget">Forget</string>
+    <string name="settings_sync_pair_button">Pair</string>
     <string name="settings_sync_discover_title">Nearby devices</string>
     <string name="settings_sync_discover_empty">No devices found. Make sure sync is enabled on the other device and both devices are on the same network.</string>
     <string name="settings_sync_last_sync">Last synced: %1$s</string>

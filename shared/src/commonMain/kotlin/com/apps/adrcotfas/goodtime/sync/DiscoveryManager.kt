@@ -91,14 +91,16 @@ class DiscoveryManager(
     private var receiveJob: Job? = null
     private var broadcastJob: Job? = null
     private var pruneJob: Job? = null
+    private var ownDeviceId: () -> String = { "" }
+    private var announcement: suspend () -> DiscoveryAnnouncement = { DiscoveryAnnouncement("", "", 0) }
 
     /**
-     * Starts listening and announcing. [ownDeviceId] is used to ignore our own announcements;
-     * [announcement] is invoked on every broadcast tick so name/port changes are reflected
-     * without restarting discovery.
+     * Binds the discovery socket and starts announcing. The receive (search) side is not
+     * started here - it is controlled with [setSearching], so the manager can stop searching
+     * once a paired device has been connected to while still letting peers find this device.
      */
     suspend fun start(ownDeviceId: () -> String, announcement: suspend () -> DiscoveryAnnouncement) {
-        if (receiveJob != null) return
+        if (socket != null) return
         val bound =
             runCatching {
                 aSocket(ActorSelectorManager(Dispatchers.IO))
@@ -114,51 +116,8 @@ class DiscoveryManager(
         // The caller may have stopped discovery while we were binding; give up if so.
         coroutineContext.ensureActive()
         socket = bound
-
-        receiveJob =
-            coroutineScope.launch {
-                try {
-                    while (isActive) {
-                        try {
-                            val datagram = bound.receive()
-                            val text =
-                                try {
-                                    datagram.packet.readString()
-                                } finally {
-                                    runCatching { datagram.packet.close() }
-                                }
-                            val senderHost =
-                                (datagram.address as? InetSocketAddress)?.hostname ?: continue
-                            val message =
-                                runCatching {
-                                    json.decodeFromString(DiscoveryAnnouncement.serializer(), text)
-                                }.getOrNull() ?: continue
-                            if (message.deviceId.isEmpty() || message.deviceId == ownDeviceId()) {
-                                continue
-                            }
-                            _discoveredPeers.update { current ->
-                                val rest = current.filter { it.deviceId != message.deviceId }
-                                (
-                                    rest +
-                                        DiscoveredPeer(
-                                            deviceId = message.deviceId,
-                                            deviceName = message.deviceName,
-                                            host = senderHost,
-                                            port = message.port,
-                                            lastSeen = nowMillis(),
-                                        )
-                                    ).sortedBy { it.deviceName.lowercase() }
-                            }
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            log.e { "discovery receive error: $e" }
-                        }
-                    }
-                } finally {
-                    runCatching { bound.close() }
-                }
-            }
+        this.ownDeviceId = ownDeviceId
+        this.announcement = announcement
 
         broadcastJob =
             coroutineScope.launch {
@@ -183,18 +142,78 @@ class DiscoveryManager(
                     delay(DiscoveryConfig.BROADCAST_INTERVAL_MS)
                 }
             }
-
-        pruneJob =
-            coroutineScope.launch {
-                while (isActive) {
-                    delay(DiscoveryConfig.PRUNE_INTERVAL_MS)
-                    val cutoff = nowMillis() - DiscoveryConfig.PEER_TTL_MS
-                    _discoveredPeers.update { current ->
-                        current.filter { it.lastSeen >= cutoff }
-                    }
-                }
-            }
         log.i { "discovery started on port ${DiscoveryConfig.PORT}" }
+    }
+
+    /**
+     * Starts or stops searching (listening for announcements). While searching is disabled the
+     * device keeps announcing so other devices can still find it, but it ignores what is on the
+     * network. Calling this is idempotent.
+     */
+    fun setSearching(enabled: Boolean) {
+        val bound = socket ?: return
+        if (enabled) {
+            if (receiveJob == null) {
+                receiveJob =
+                    coroutineScope.launch {
+                        while (isActive) {
+                            try {
+                                val datagram = bound.receive()
+                                val text =
+                                    try {
+                                        datagram.packet.readString()
+                                    } finally {
+                                        runCatching { datagram.packet.close() }
+                                    }
+                                val senderHost =
+                                    (datagram.address as? InetSocketAddress)?.hostname ?: continue
+                                val message =
+                                    runCatching {
+                                        json.decodeFromString(DiscoveryAnnouncement.serializer(), text)
+                                    }.getOrNull() ?: continue
+                                if (message.deviceId.isEmpty() || message.deviceId == ownDeviceId()) {
+                                    continue
+                                }
+                                _discoveredPeers.update { current ->
+                                    val rest = current.filter { it.deviceId != message.deviceId }
+                                    (
+                                        rest +
+                                            DiscoveredPeer(
+                                                deviceId = message.deviceId,
+                                                deviceName = message.deviceName,
+                                                host = senderHost,
+                                                port = message.port,
+                                                lastSeen = nowMillis(),
+                                            )
+                                        ).sortedBy { it.deviceName.lowercase() }
+                                }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                log.e { "discovery receive error: $e" }
+                            }
+                        }
+                    }
+                pruneJob =
+                    coroutineScope.launch {
+                        while (isActive) {
+                            delay(DiscoveryConfig.PRUNE_INTERVAL_MS)
+                            val cutoff = nowMillis() - DiscoveryConfig.PEER_TTL_MS
+                            _discoveredPeers.update { current ->
+                                current.filter { it.lastSeen >= cutoff }
+                            }
+                        }
+                    }
+                log.i { "discovery searching" }
+            }
+        } else {
+            receiveJob?.cancel()
+            receiveJob = null
+            pruneJob?.cancel()
+            pruneJob = null
+            _discoveredPeers.value = emptyList()
+            log.i { "discovery search stopped" }
+        }
     }
 
     fun stop() {

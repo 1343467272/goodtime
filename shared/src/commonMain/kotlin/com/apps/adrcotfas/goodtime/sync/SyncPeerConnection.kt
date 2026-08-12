@@ -47,6 +47,8 @@ class SyncPeerConnection(
     val host: String,
     private val deviceId: String,
     private val serverName: String,
+    /** This device's sync server port, advertised to the peer so it can pair with us. */
+    private val localPort: Int,
     private val onHello: suspend (SyncPeerConnection, HelloPayload) -> Unit,
     private val onSnapshot: suspend (SnapshotPayload) -> Unit,
     private val onTimerState: suspend (SyncedTimerState) -> Unit,
@@ -71,7 +73,10 @@ class SyncPeerConnection(
     suspend fun start() {
         sendEnvelope(
             SyncMessageTypes.HELLO,
-            json.encodeToString(HelloPayload.serializer(), HelloPayload(deviceId, serverName)),
+            json.encodeToString(
+                HelloPayload.serializer(),
+                HelloPayload(deviceId, serverName, localPort),
+            ),
         )
         try {
             session.incoming.consumeAsFlow().collect { frame ->

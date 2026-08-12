@@ -70,6 +70,8 @@ data class SyncStatus(
 data class HelloPayload(
     val deviceId: String,
     val serverName: String,
+    /** Port the sender's sync server listens on; used by the peer to remember how to reach it. */
+    val port: Int = 0,
 )
 
 /**

@@ -20,6 +20,7 @@ package com.apps.adrcotfas.goodtime.settings.sync
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.apps.adrcotfas.goodtime.common.TimeFormatProvider
+import com.apps.adrcotfas.goodtime.data.settings.PairedPeer
 import com.apps.adrcotfas.goodtime.data.settings.SettingsRepository
 import com.apps.adrcotfas.goodtime.data.settings.SyncSettings
 import com.apps.adrcotfas.goodtime.sync.DiscoveredPeer
@@ -52,6 +53,7 @@ data class SyncUiState(
     val connectFailed: Boolean = false,
     val connectErrorDetail: String? = null,
     val peers: List<SyncPeerInfo> = emptyList(),
+    val pairedPeers: List<PairedPeer> = emptyList(),
     val discoveredPeers: List<DiscoveredPeer> = emptyList(),
 )
 
@@ -89,6 +91,7 @@ class SyncViewModel(
                             connectFailed = status.lastConnectError != null,
                             connectErrorDetail = status.lastConnectError,
                             peers = status.peers,
+                            pairedPeers = syncSettings.pairedPeers,
                             discoveredPeers = discovered,
                         )
                     }
@@ -105,6 +108,17 @@ class SyncViewModel(
             } else {
                 syncManager.stop()
             }
+        }
+    }
+
+    /** Called when the sync settings screen opens or closes, to enable/disable searching for unpaired devices. */
+    fun onScreenVisible(visible: Boolean) {
+        syncManager.setSyncScreenVisible(visible)
+    }
+
+    fun forgetPeer(deviceId: String) {
+        viewModelScope.launch {
+            syncManager.forgetPeer(deviceId)
         }
     }
 

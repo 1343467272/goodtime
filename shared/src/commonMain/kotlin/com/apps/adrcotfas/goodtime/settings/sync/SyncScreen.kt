@@ -36,6 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,9 +70,13 @@ import goodtime_productivity.shared.generated.resources.settings_sync_edit_name
 import goodtime_productivity.shared.generated.resources.settings_sync_edit_port
 import goodtime_productivity.shared.generated.resources.settings_sync_enable_desc
 import goodtime_productivity.shared.generated.resources.settings_sync_enable_title
+import goodtime_productivity.shared.generated.resources.settings_sync_forget
 import goodtime_productivity.shared.generated.resources.settings_sync_last_sync
 import goodtime_productivity.shared.generated.resources.settings_sync_local_ip
 import goodtime_productivity.shared.generated.resources.settings_sync_never_synced
+import goodtime_productivity.shared.generated.resources.settings_sync_paired_empty
+import goodtime_productivity.shared.generated.resources.settings_sync_paired_title
+import goodtime_productivity.shared.generated.resources.settings_sync_pair_button
 import goodtime_productivity.shared.generated.resources.settings_sync_port
 import goodtime_productivity.shared.generated.resources.settings_sync_port_desc
 import goodtime_productivity.shared.generated.resources.settings_sync_server_running
@@ -87,6 +92,12 @@ fun SyncScreen(onNavigateBack: () -> Boolean) {
     val viewModel: SyncViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val syncSettings = uiState.syncSettings
+
+    // Unpaired devices are only searched for while this screen is open, like a Bluetooth scan.
+    DisposableEffect(Unit) {
+        viewModel.onScreenVisible(true)
+        onDispose { viewModel.onScreenVisible(false) }
+    }
 
     var showEditName by remember { mutableStateOf(false) }
     var showEditPort by remember { mutableStateOf(false) }
@@ -263,6 +274,31 @@ fun SyncScreen(onNavigateBack: () -> Boolean) {
 
             if (syncSettings.enabled) {
                 SubtleHorizontalDivider()
+                CompactPreferenceGroupTitle(text = stringResource(Res.string.settings_sync_paired_title))
+                if (uiState.pairedPeers.isEmpty()) {
+                    BetterListItem(
+                        title = stringResource(Res.string.settings_sync_paired_empty),
+                    )
+                } else {
+                    uiState.pairedPeers.forEach { peer ->
+                        BetterListItem(
+                            title = peer.deviceName,
+                            subtitle = peer.host,
+                            trailing = {
+                                TextButton(
+                                    enabled = !uiState.connecting,
+                                    onClick = { viewModel.forgetPeer(peer.deviceId) },
+                                ) {
+                                    Text(stringResource(Res.string.settings_sync_forget))
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+
+            if (syncSettings.enabled) {
+                SubtleHorizontalDivider()
                 CompactPreferenceGroupTitle(text = stringResource(Res.string.settings_sync_discover_title))
                 if (uiState.discoveredPeers.isEmpty()) {
                     BetterListItem(
@@ -278,7 +314,7 @@ fun SyncScreen(onNavigateBack: () -> Boolean) {
                                     enabled = !uiState.connecting,
                                     onClick = { viewModel.connectTo(peer) },
                                 ) {
-                                    Text(stringResource(Res.string.settings_sync_connect_button))
+                                    Text(stringResource(Res.string.settings_sync_pair_button))
                                 }
                             },
                         )

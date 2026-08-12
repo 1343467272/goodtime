@@ -36,6 +36,10 @@
     <string name="settings_sync_connect_button">連線</string>
     <string name="settings_sync_connecting">正在連線…</string>
     <string name="settings_sync_connect_failed">連線失敗。請檢查 IP 和連接埠，並確認兩台裝置在同一網路，或連線自動發現的裝置。</string>
+    <string name="settings_sync_paired_title">已配對裝置</string>
+    <string name="settings_sync_paired_empty">還沒有已配對的裝置。請從附近的裝置列表中配對一台。</string>
+    <string name="settings_sync_forget">取消配對</string>
+    <string name="settings_sync_pair_button">配對</string>
     <string name="settings_sync_discover_title">附近的裝置</string>
     <string name="settings_sync_discover_empty">未找到裝置。請確保其他裝置已開啟同步，且兩台裝置在同一網路。</string>
     <string name="settings_sync_last_sync">上次同步：%1$s</string>
