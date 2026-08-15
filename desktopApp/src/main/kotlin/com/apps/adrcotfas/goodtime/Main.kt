@@ -20,6 +20,9 @@ package com.apps.adrcotfas.goodtime
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.decodeToImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -53,9 +56,15 @@ fun main() = application {
     // Desktop has no billing backend, so "Pro" features are free and the Pro
     // screen becomes a support/donation page (same semantics as the F-Droid build).
     Distribution.isFdroid = true
+    val windowIcon: Painter? = remember {
+        Distribution::class.java.classLoader.getResourceAsStream("icon.png")?.use {
+            BitmapPainter(it.readBytes().decodeToImageBitmap())
+        }
+    }
     Window(
         onCloseRequest = ::exitApplication,
         title = "Goodtime",
+        icon = windowIcon,
         state = rememberWindowState(width = 420.dp, height = 820.dp),
     ) {
         AppWithKoin()

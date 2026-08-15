@@ -46,6 +46,7 @@ compose.desktop {
             windows {
                 dirChooser = true
                 menuGroup = "Goodtime"
+                iconFile.set(project.file("src/main/resources/icon.ico"))
             }
         }
     }
