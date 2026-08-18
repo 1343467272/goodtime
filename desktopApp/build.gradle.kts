@@ -35,7 +35,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "Goodtime"
-            packageVersion = "3.2.8"
+            packageVersion = "3.2.9"
             description = "Goodtime - Productivity Timer"
 
             // androidx.datastore (protobuf reflective schemas) and other libs
