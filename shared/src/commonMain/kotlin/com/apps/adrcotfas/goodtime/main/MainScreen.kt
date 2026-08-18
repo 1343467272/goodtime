@@ -64,9 +64,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -88,6 +95,7 @@ import com.apps.adrcotfas.goodtime.main.dialcontrol.rememberCustomDialControlSta
 import com.apps.adrcotfas.goodtime.main.dialcontrol.updateEnabledOptions
 import com.apps.adrcotfas.goodtime.main.finishedsession.FinishedSessionSheet
 import com.apps.adrcotfas.goodtime.onboarding.tutorial.TutorialScreen
+import com.apps.adrcotfas.goodtime.platform.getPlatformConfiguration
 import com.apps.adrcotfas.goodtime.platform.isFDroid
 import com.apps.adrcotfas.goodtime.settings.permissions.getPermissionsState
 import com.apps.adrcotfas.goodtime.settings.permissions.rememberAlarmPermissionRequester
@@ -242,9 +250,53 @@ fun MainScreen(
     var showNavigationSheet by rememberSaveable { mutableStateOf(false) }
     var showSelectLabelDialog by rememberSaveable { mutableStateOf(false) }
     var showResetBreakBudgetDialog by rememberSaveable { mutableStateOf(false) }
+    var showFinishedSessionSheet by remember(timerUiState.isFinished, timerUiState.endTime) {
+        mutableStateOf(timerUiState.isFinished && viewModel.isWithinInactivityTimeout())
+    }
 
     val showTutorial = uiState.showTutorial
     val isPortrait = isPortrait()
+
+    val isDesktop = getPlatformConfiguration().isDesktop
+    val focusRequester = remember { FocusRequester() }
+
+    // Shared start/toggle actions so the timer-text tap and the desktop spacebar shortcut behave
+    // identically: not active -> start, otherwise toggle pause/resume.
+    val onStartTimer: () -> Unit = {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        coroutineScope.launch {
+            if (!requestAlarmPermission()) {
+                viewModel.startTimer()
+            }
+        }
+    }
+    val onToggleTimer: () -> Unit = {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        coroutineScope.launch {
+            if (!requestAlarmPermission()) {
+                viewModel.toggleTimer()
+            }
+        }
+    }
+
+    // On desktop, keep the timer screen focused so the spacebar shortcut works on launch and after
+    // any overlay sheet/dialog is dismissed. Mobile platforms are unaffected.
+    LaunchedEffect(
+        isDesktop,
+        timerUiState.isReady,
+        showFinishedSessionSheet,
+        showNavigationSheet,
+        showSelectLabelDialog,
+        showResetBreakBudgetDialog,
+        showTutorial,
+    ) {
+        if (isDesktop && timerUiState.isReady &&
+            !showFinishedSessionSheet && !showNavigationSheet &&
+            !showSelectLabelDialog && !showResetBreakBudgetDialog && !showTutorial
+        ) {
+            runCatching { focusRequester.requestFocus() }
+        }
+    }
 
     AnimatedVisibility(
         timerUiState.isReady,
@@ -256,6 +308,25 @@ fun MainScreen(
                 modifier =
                 Modifier
                     .fillMaxSize()
+                    .then(
+                        if (isDesktop) {
+                            Modifier
+                                .onPreviewKeyEvent { keyEvent ->
+                                    if (keyEvent.key == Key.Spacebar &&
+                                        keyEvent.type == KeyEventType.KeyUp &&
+                                        !showTutorial
+                                    ) {
+                                        if (!timerUiState.isActive) onStartTimer() else onToggleTimer()
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                .focusRequester(focusRequester)
+                        } else {
+                            Modifier
+                        },
+                    )
                     .clickable(
                         interactionSource = interactionSource,
                         indication = null,
@@ -297,22 +368,8 @@ fun MainScreen(
                         displayTime = { displayTimeState.value },
                         timerStyle = timerStyle,
                         domainLabel = label,
-                        onStart = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            coroutineScope.launch {
-                                if (!requestAlarmPermission()) {
-                                    viewModel.startTimer()
-                                }
-                            }
-                        },
-                        onToggle = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            coroutineScope.launch {
-                                if (!requestAlarmPermission()) {
-                                    viewModel.toggleTimer()
-                                }
-                            }
-                        },
+                        onStart = onStartTimer,
+                        onToggle = onToggleTimer,
                         onLongClick = { navController.navigate(SettingsDest) },
                         onBreakBudgetClick = { showResetBreakBudgetDialog = true },
                     )
@@ -369,10 +426,6 @@ fun MainScreen(
                 mainViewModel.setNotificationPermissionGranted(granted)
             },
         )
-    }
-
-    var showFinishedSessionSheet by remember(timerUiState.isFinished, timerUiState.endTime) {
-        mutableStateOf(timerUiState.isFinished && viewModel.isWithinInactivityTimeout())
     }
 
     // Auto-reset once the inactivity timeout elapses (immediately if already past it, e.g. after
